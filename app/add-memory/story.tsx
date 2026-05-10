@@ -10,41 +10,40 @@ import {
     Modal,
     Pressable
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { ms, vs } from 'react-native-size-matters';
 import { FONTS } from '@/constants/theme';
 import { MemoryCalendarModal } from '@/components/MemoryCalendarModal';
+import { PhotoCollector, VideoCollector, VoiceCollector } from '@/components/MediaCollectors';
+import * as Haptics from 'expo-haptics';
 
 const STEPS = ['Type', 'Story', 'Tags', 'Save'];
 
 export default function StoryStepScreen() {
     const router = useRouter();
+    // Retrieve explicit dynamic type vector from the previous screen navigation trigger
+    const { type } = useLocalSearchParams<{ type: string }>();
     const isDarkMode = useColorScheme() === 'dark';
 
     // Logic: Form Inputs
     const [title, setTitle] = useState('');
     const [narrative, setNarrative] = useState('');
-    const [date, setDate] = useState(''); // Raw machine string YYYY-MM-DD
-    const [friendlyDate, setFriendlyDate] = useState(''); // Human readable string
+    const [date, setDate] = useState(''); 
+    const [friendlyDate, setFriendlyDate] = useState(''); 
     const [showCalendar, setShowCalendar] = useState(false);
 
-    // Handlers: Intelligent chronological formatting logic
     const handleDayPress = (day: any) => {
         const dateStr = day.dateString;
         setDate(dateStr);
-        
-        // Pure parse without timezone interference
         const [y, m, d] = dateStr.split('-');
         const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
         const formatted = `${months[parseInt(m) - 1]} ${parseInt(d)}, ${y}`;
-        
         setFriendlyDate(formatted);
-        setShowCalendar(false); // Clean close
+        setShowCalendar(false);
     };
 
-    // Chromatic Synchronization
     const palette = {
         bg: isDarkMode ? '#121212' : '#F9F8F6',
         textDark: isDarkMode ? '#FFFFFF' : '#2D2C39',
@@ -53,7 +52,6 @@ export default function StoryStepScreen() {
         trackActive: '#8EA281',
         btnPrimary: '#8EA281',
         
-        // Story-specific visual variables
         uploadBg: isDarkMode ? 'transparent' : '#BAC5B6',
         uploadBorder: '#8EA281',
         iconBack: isDarkMode ? '#2E2E33' : '#FFFFFF',
@@ -65,7 +63,7 @@ export default function StoryStepScreen() {
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: palette.bg }]}>
-            {/* Header Context Lock */}
+            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity 
                     style={[styles.backBtn, { backgroundColor: palette.backBg }]}
@@ -76,11 +74,11 @@ export default function StoryStepScreen() {
                 <Text style={[styles.headerTitle, { color: palette.textDark }]}>Add a Memory</Text>
             </View>
 
-            {/* Step Serialization (Now both Step 1 & 2 are Active) */}
+            {/* Stepper */}
             <View style={styles.stepperContainer}>
                 <View style={styles.stepperRow}>
                     {STEPS.map((step, index) => {
-                        const isFilled = index <= 1; // Both Type and Story are unlocked!
+                        const isFilled = index <= 1;
                         return (
                             <View key={step} style={styles.stepWrapper}>
                                 <View style={[
@@ -101,44 +99,25 @@ export default function StoryStepScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 
-                {/* Section 1: Massive Asset Uploader Dropzone */}
-                <Text style={[styles.sectionHeader, { color: palette.textDark, marginBottom: vs(12) }]}>
-                    Choose a photo from your device or take one now.
-                </Text>
-
-                <View style={[
-                    styles.uploadContainer,
-                    { 
-                        backgroundColor: palette.uploadBg,
-                        borderColor: palette.uploadBorder,
-                    }
-                ]}>
-                    <View style={[styles.uploadInnerIcon, { backgroundColor: palette.iconBack }]}>
-                        <Feather name="image" size={ms(28)} color={isDarkMode ? '#8EA281' : '#B6C3B0'} />
-                    </View>
-
-                    <Text style={[styles.uploadTitle, { color: isDarkMode ? '#8EA281' : '#FFFFFF' }]}>Upload a photo</Text>
-                    <Text style={[styles.uploadSub, { color: isDarkMode ? '#A0A0A0' : '#FFFFFF' }]}>JPG, PNG, HEIC, WebP · Up to 50 MB</Text>
-
-                    <View style={styles.uploadBtnRow}>
-                        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: palette.browseBtn }]}>
-                            <Feather name="upload" size={ms(14)} color="#FFFFFF" style={{ marginRight: ms(6) }} />
-                            <Text style={styles.actionBtnText}>Browse files</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: palette.cameraBtn }]}>
-                            <Feather name="camera" size={ms(14)} color="#FFFFFF" style={{ marginRight: ms(6) }} />
-                            <Text style={styles.actionBtnText}>Camera</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
+                {/* Section 1: Media Collectors Matrix Switch (Conditional) */}
+                {type === 'photo' && <PhotoCollector palette={palette} isDarkMode={isDarkMode} />}
+                {type === 'video' && <VideoCollector palette={palette} isDarkMode={isDarkMode} />}
+                {type === 'voice' && <VoiceCollector palette={palette} isDarkMode={isDarkMode} />}
+                
+                {/* If type === 'journal', nothing renders in this top slot, perfectly advancing straight to narration! */}
 
                 {/* Section 2: Narrative Form Controls */}
-                <Text style={[styles.sectionHeader, { color: palette.textDark, marginTop: vs(24), marginBottom: vs(12) }]}>
+                <Text style={[
+                    styles.sectionHeader, 
+                    { 
+                        color: palette.textDark, 
+                        marginTop: type === 'journal' ? 0 : vs(24), 
+                        marginBottom: vs(12) 
+                    }
+                ]}>
                     Tell the story behind this memory.
                 </Text>
 
-                {/* Field: Title */}
                 <Text style={[styles.label, { color: palette.textDark }]}>Title</Text>
                 <View style={[styles.inputWrapper, { backgroundColor: palette.inputBg }]}>
                     <TextInput
@@ -150,7 +129,6 @@ export default function StoryStepScreen() {
                     />
                 </View>
 
-                {/* Field: Narrative (Multi-line) */}
                 <Text style={[styles.label, { color: palette.textDark, marginTop: vs(16) }]}>Narrative</Text>
                 <View style={[styles.textAreaWrapper, { backgroundColor: palette.inputBg }]}>
                     <TextInput
@@ -164,7 +142,6 @@ export default function StoryStepScreen() {
                     />
                 </View>
 
-                {/* Field: Date with Intelligent Calendar Picker Matrix */}
                 <Text style={[styles.label, { color: palette.textDark, marginTop: vs(16) }]}>Date</Text>
                 <TouchableOpacity 
                     activeOpacity={0.8}
@@ -182,17 +159,20 @@ export default function StoryStepScreen() {
 
             </ScrollView>
 
-            {/* Bottom Anchor Button */}
+            {/* Bottom Anchor */}
             <View style={styles.footer}>
                 <TouchableOpacity 
                     style={[styles.continueBtn, { backgroundColor: palette.btnPrimary }]}
                     activeOpacity={0.9}
+                    onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        router.push('/add-memory/tags');
+                    }}
                 >
                     <Text style={styles.continueText}>Continue</Text>
                 </TouchableOpacity>
             </View>
 
-            {/* Componentized Systemic Calendar Modal Engine */}
             <MemoryCalendarModal
                 visible={showCalendar}
                 onClose={() => setShowCalendar(false)}
@@ -265,7 +245,7 @@ const styles = StyleSheet.create({
         padding: ms(20),
         borderRadius: ms(20),
         borderWidth: 1.5,
-        borderStyle: 'dashed', // Match specification visual
+        borderStyle: 'dashed', 
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -331,7 +311,7 @@ const styles = StyleSheet.create({
     input: {
         fontFamily: FONTS.sans,
         fontSize: ms(14),
-        padding: 0, // Strip default RN inputs padding
+        padding: 0, 
     },
     textArea: {
         fontFamily: FONTS.sans,

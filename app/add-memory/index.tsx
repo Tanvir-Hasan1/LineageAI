@@ -1,4 +1,5 @@
 import { FONTS } from '@/constants/theme';
+import * as Haptics from 'expo-haptics';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -169,7 +170,13 @@ export default function AddMemoryScreen() {
                 <TouchableOpacity
                     style={[styles.continueBtn, { backgroundColor: palette.btnPrimary }]}
                     activeOpacity={0.9}
-                    onPress={() => router.push('/add-memory/story')}
+                    onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        router.push({
+                            pathname: '/add-memory/story',
+                            params: { type: selectedType }
+                        });
+                    }}
                 >
                     <Text style={styles.continueText}>Continue</Text>
                 </TouchableOpacity>
