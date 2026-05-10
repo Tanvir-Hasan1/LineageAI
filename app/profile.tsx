@@ -17,6 +17,8 @@ import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { ms, vs } from 'react-native-size-matters';
 import { FONTS } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
+import { SignOutModal } from '@/components/SignOutModal';
+import { DeleteAccountModal } from '@/components/DeleteAccountModal';
 
 export default function ProfileScreen() {
     const router = useRouter();
@@ -27,6 +29,10 @@ export default function ProfileScreen() {
     const [aiInsights, setAiInsights] = useState(true);
     const [darkMode, setDarkMode] = useState(isDarkMode);
     const [analytics, setAnalytics] = useState(false);
+
+    // Modal Interaction States
+    const [showSignOut, setShowSignOut] = useState(false);
+    const [showDelete, setShowDelete] = useState(false);
 
     // Synchronize local UI state with Native App Appearance engine immediately
     const toggleDarkMode = (val: boolean) => {
@@ -61,7 +67,7 @@ export default function ProfileScreen() {
     };
 
     // Row Builder Helper for clean mapping
-    const SettingsRow = ({ icon, label, subtext, groupType, showArrow = true, showSwitch = false, switchVal = false, setSwitchVal = null, isRed = false }: any) => {
+    const SettingsRow = ({ icon, label, subtext, groupType, showArrow = true, showSwitch = false, switchVal = false, setSwitchVal = null, isRed = false, onPress = null }: any) => {
         
         let iconBg = palette.iconBoxAccount;
         let iconColor = '#FFFFFF';
@@ -114,7 +120,13 @@ export default function ProfileScreen() {
             <TouchableOpacity 
                 style={styles.settingsRow} 
                 activeOpacity={0.6}
-                onPress={triggerHaptic}
+                onPress={() => {
+                    if (onPress) {
+                        onPress();
+                    } else {
+                        triggerHaptic();
+                    }
+                }}
             >
                 {content}
             </TouchableOpacity>
@@ -149,9 +161,9 @@ export default function ProfileScreen() {
                 <View style={[styles.groupContainer, { backgroundColor: palette.accountBg }]}>
                     <SettingsRow icon="user" label="Edit Profile" groupType="account" />
                     <View style={styles.divider} />
-                    <SettingsRow icon="users" label="Family Access" groupType="account" />
+                    <SettingsRow icon="users" label="Family Access" groupType="account" onPress={() => { triggerHaptic(); router.push('/family-access'); }} />
                     <View style={styles.divider} />
-                    <SettingsRow icon="shield" label="Legacy Mode" groupType="account" />
+                    <SettingsRow icon="shield" label="Legacy Mode" groupType="account" onPress={() => { triggerHaptic(); router.push('/legacy-mode'); }} />
                 </View>
 
                 {/* ----------- PRIVACY & SECURITY ---------- */}
@@ -221,6 +233,7 @@ export default function ProfileScreen() {
                         subtext="Permanently remove all data" 
                         groupType="data"
                         isRed={true}
+                        onPress={() => setShowDelete(true)}
                     />
                 </View>
 
@@ -228,13 +241,39 @@ export default function ProfileScreen() {
                 <TouchableOpacity 
                     style={[styles.signOutBtn, { backgroundColor: palette.signOutBg }]}
                     activeOpacity={0.8}
-                    onPress={triggerHaptic}
+                    onPress={() => {
+                        triggerHaptic();
+                        setShowSignOut(true);
+                    }}
                 >
                     <Feather name="log-out" size={ms(18)} color={palette.signOutText} style={{ marginRight: ms(8) }} />
                     <Text style={[styles.signOutText, { color: palette.signOutText }]}>Sign Out</Text>
                 </TouchableOpacity>
 
             </ScrollView>
+
+            {/* ---------------- MODAL INTERCEPT OVERLAYS --------------- */}
+            
+            <SignOutModal
+                visible={showSignOut}
+                onClose={() => setShowSignOut(false)}
+                onConfirm={() => {
+                    setShowSignOut(false);
+                    // Logically direct user back out to home/login if built
+                    router.replace('/'); 
+                }}
+            />
+
+            <DeleteAccountModal
+                visible={showDelete}
+                onClose={() => setShowDelete(false)}
+                onConfirm={() => {
+                    setShowDelete(false);
+                    // Irreversible action redirect
+                    router.replace('/');
+                }}
+            />
+
         </SafeAreaView>
     );
 }
