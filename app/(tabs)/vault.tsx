@@ -267,6 +267,7 @@ export default function MemoryVaultScreen() {
                     <TouchableOpacity
                         style={[styles.fab, { backgroundColor: '#9FA0BA' }]}
                         activeOpacity={0.8}
+                        onPress={() => router.push('/add-memory')}
                     >
                         <Feather name="plus" size={ms(20)} color="#FFFFFF" style={{ marginRight: ms(6) }} />
                         <Text style={styles.fabText}>Add Memory</Text>
