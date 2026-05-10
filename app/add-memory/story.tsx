@@ -6,13 +6,16 @@ import {
     TouchableOpacity, 
     ScrollView,
     useColorScheme,
-    TextInput
+    TextInput,
+    Modal,
+    Pressable
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { ms, vs } from 'react-native-size-matters';
 import { FONTS } from '@/constants/theme';
+import { MemoryCalendarModal } from '@/components/MemoryCalendarModal';
 
 const STEPS = ['Type', 'Story', 'Tags', 'Save'];
 
@@ -23,7 +26,23 @@ export default function StoryStepScreen() {
     // Logic: Form Inputs
     const [title, setTitle] = useState('');
     const [narrative, setNarrative] = useState('');
-    const [date, setDate] = useState('');
+    const [date, setDate] = useState(''); // Raw machine string YYYY-MM-DD
+    const [friendlyDate, setFriendlyDate] = useState(''); // Human readable string
+    const [showCalendar, setShowCalendar] = useState(false);
+
+    // Handlers: Intelligent chronological formatting logic
+    const handleDayPress = (day: any) => {
+        const dateStr = day.dateString;
+        setDate(dateStr);
+        
+        // Pure parse without timezone interference
+        const [y, m, d] = dateStr.split('-');
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+        const formatted = `${months[parseInt(m) - 1]} ${parseInt(d)}, ${y}`;
+        
+        setFriendlyDate(formatted);
+        setShowCalendar(false); // Clean close
+    };
 
     // Chromatic Synchronization
     const palette = {
@@ -145,17 +164,21 @@ export default function StoryStepScreen() {
                     />
                 </View>
 
-                {/* Field: Date */}
+                {/* Field: Date with Intelligent Calendar Picker Matrix */}
                 <Text style={[styles.label, { color: palette.textDark, marginTop: vs(16) }]}>Date</Text>
-                <View style={[styles.inputWrapper, { backgroundColor: palette.inputBg }]}>
-                    <TextInput
-                        placeholder="e.g. August 14, 1978"
-                        placeholderTextColor={palette.placeholder}
-                        style={[styles.input, { color: palette.textDark }]}
-                        value={date}
-                        onChangeText={setDate}
-                    />
-                </View>
+                <TouchableOpacity 
+                    activeOpacity={0.8}
+                    onPress={() => setShowCalendar(true)}
+                    style={[styles.inputWrapper, { backgroundColor: palette.inputBg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                >
+                    <Text style={[
+                        styles.input, 
+                        { color: friendlyDate ? palette.textDark : palette.placeholder, paddingTop: vs(1) }
+                    ]}>
+                        {friendlyDate || "e.g. August 14, 1978"}
+                    </Text>
+                    <Feather name="calendar" size={ms(16)} color={palette.placeholder} />
+                </TouchableOpacity>
 
             </ScrollView>
 
@@ -168,6 +191,14 @@ export default function StoryStepScreen() {
                     <Text style={styles.continueText}>Continue</Text>
                 </TouchableOpacity>
             </View>
+
+            {/* Componentized Systemic Calendar Modal Engine */}
+            <MemoryCalendarModal
+                visible={showCalendar}
+                onClose={() => setShowCalendar(false)}
+                onSelectDate={handleDayPress}
+                selectedDate={date}
+            />
         </SafeAreaView>
     );
 }
