@@ -90,13 +90,20 @@ export default function DashboardScreen() {
                             <MaterialCommunityIcons name="bell-outline" size={26} color={colors.primaryAlt} />
                             <View style={styles.notificationDot} />
                         </TouchableOpacity>
-                        <View style={styles.avatarWrapper}>
+                        <TouchableOpacity 
+                            style={styles.avatarWrapper}
+                            activeOpacity={0.8}
+                            onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                router.push('/profile');
+                            }}
+                        >
                             <Image
                                 source={require('@/assets/images/dashboard/avatar.png')}
                                 style={styles.avatar}
                             />
                             <View style={styles.onlineBadge} />
-                        </View>
+                        </TouchableOpacity>
                     </View>
                 </View>
 
