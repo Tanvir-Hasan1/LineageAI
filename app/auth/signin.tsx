@@ -1,8 +1,9 @@
-import { COLORS, FONTS } from '@/constants/theme';
+import { useAppTheme } from '@/hooks/use-app-theme';
+import { LightTheme, FONTS } from '@/constants/theme';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     KeyboardAvoidingView,
     Platform,
@@ -12,6 +13,7 @@ import {
     TextInput,
     TouchableOpacity,
     View,
+    useColorScheme
 } from 'react-native';
 import Animated, { FadeIn, Layout } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,8 +21,12 @@ import { ScaledSheet } from 'react-native-size-matters';
 
 export default function SignInScreen() {
     const router = useRouter();
+    const colors = useAppTheme();
+    const colorScheme = useColorScheme();
     const [isSecure, setIsSecure] = useState(true);
     const [isTermsAccepted, setIsTermsAccepted] = useState(false);
+    
+    const styles = useMemo(() => getStyles(colors), [colors]);
 
     const navigateToSignUp = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -48,7 +54,11 @@ export default function SignInScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+            <StatusBar 
+              barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} 
+              backgroundColor="transparent" 
+              translucent 
+            />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
@@ -60,7 +70,7 @@ export default function SignInScreen() {
                 >
                     {/* Back Button */}
                     <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
-                        <Feather name="arrow-left" size={22} color={COLORS.textDark} />
+                        <Feather name="arrow-left" size={22} color={colors.textDark} />
                     </TouchableOpacity>
 
                     {/* Header */}
@@ -97,7 +107,7 @@ export default function SignInScreen() {
                             <View style={styles.inputWrapper}>
                                 <TextInput
                                     placeholder="you@example.com"
-                                    placeholderTextColor="#A09EB3"
+                                    placeholderTextColor={colors.textMuted}
                                     style={styles.input}
                                     keyboardType="email-address"
                                     autoCapitalize="none"
@@ -111,7 +121,7 @@ export default function SignInScreen() {
                             <View style={styles.inputWrapper}>
                                 <TextInput
                                     placeholder="At least 6 characters"
-                                    placeholderTextColor="#A09EB3"
+                                    placeholderTextColor={colors.textMuted}
                                     style={[styles.input, { paddingRight: 45 }]}
                                     secureTextEntry={isSecure}
                                     autoCapitalize="none"
@@ -123,7 +133,7 @@ export default function SignInScreen() {
                                     <Feather
                                         name={isSecure ? 'eye-off' : 'eye'}
                                         size={18}
-                                        color={COLORS.textMuted}
+                                        color={colors.textMuted}
                                     />
                                 </TouchableOpacity>
                             </View>
@@ -167,10 +177,10 @@ export default function SignInScreen() {
     );
 }
 
-const styles = ScaledSheet.create({
+const getStyles = (colors: typeof LightTheme) => ScaledSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.background,
+        backgroundColor: colors.background,
     },
     scrollContainer: {
         paddingHorizontal: '24@ms',
@@ -181,7 +191,7 @@ const styles = ScaledSheet.create({
         width: '40@ms',
         height: '40@ms',
         borderRadius: '20@ms',
-        backgroundColor: '#EFEFF0',
+        backgroundColor: colors.btnSecondaryBg,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: '30@vs',
@@ -194,18 +204,18 @@ const styles = ScaledSheet.create({
         fontSize: '38@ms',
         lineHeight: '44@ms',
         fontWeight: '600',
-        color: COLORS.textDark,
+        color: colors.textDark,
         marginBottom: '8@vs',
     },
     subtitle: {
         fontFamily: FONTS.sans,
         fontSize: '15@ms',
-        color: COLORS.accentGreen,
+        color: colors.accentGreen,
         letterSpacing: 0.2,
     },
     tabContainer: {
         flexDirection: 'row',
-        backgroundColor: COLORS.tabBgInactive,
+        backgroundColor: colors.tabBgInactive,
         borderRadius: '12@ms',
         padding: '4@ms',
         height: '45@vs',
@@ -218,7 +228,7 @@ const styles = ScaledSheet.create({
         borderRadius: '9@ms',
     },
     tabActive: {
-        backgroundColor: COLORS.tabBgActive,
+        backgroundColor: colors.tabBgActive,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
@@ -238,7 +248,7 @@ const styles = ScaledSheet.create({
         fontWeight: '500',
     },
     tabTextInactive: {
-        color: '#6B6980',
+        color: colors.textMuted,
     },
     formContainer: {
         gap: '18@vs',
@@ -250,7 +260,7 @@ const styles = ScaledSheet.create({
     label: {
         fontFamily: FONTS.serif,
         fontSize: '15@ms',
-        color: COLORS.textDark,
+        color: colors.textDark,
         fontWeight: '500',
         marginLeft: '2@ms',
     },
@@ -259,13 +269,13 @@ const styles = ScaledSheet.create({
         justifyContent: 'center',
     },
     input: {
-        backgroundColor: COLORS.inputBg,
+        backgroundColor: colors.inputBg,
         height: '52@vs',
         borderRadius: '12@ms',
         paddingHorizontal: '16@ms',
         fontSize: '15@ms',
         fontFamily: FONTS.sans,
-        color: COLORS.textDark,
+        color: colors.textDark,
     },
     eyeBtn: {
         position: 'absolute',
@@ -279,7 +289,7 @@ const styles = ScaledSheet.create({
     forgotText: {
         fontFamily: FONTS.sans,
         fontSize: '13@ms',
-        color: COLORS.accentGreen,
+        color: colors.accentGreen,
     },
     footer: {
         gap: '30@vs',
@@ -287,7 +297,7 @@ const styles = ScaledSheet.create({
         marginTop: '10@vs',
     },
     primaryBtn: {
-        backgroundColor: COLORS.primaryAlt,
+        backgroundColor: colors.primaryAlt,
         height: '56@vs',
         width: '100%',
         borderRadius: '14@ms',
@@ -316,23 +326,23 @@ const styles = ScaledSheet.create({
         height: '18@ms',
         borderRadius: '4@ms',
         borderWidth: 1,
-        borderColor: '#A09EB3',
+        borderColor: colors.textMuted,
         marginRight: '10@ms',
         justifyContent: 'center',
         alignItems: 'center',
     },
     checkboxChecked: {
-        backgroundColor: COLORS.primaryAlt,
-        borderColor: COLORS.primaryAlt,
+        backgroundColor: colors.primaryAlt,
+        borderColor: colors.primaryAlt,
     },
     termsText: {
         fontFamily: FONTS.sans,
         fontSize: '12@ms',
-        color: '#7F7D8D',
+        color: colors.textMuted,
         lineHeight: '18@ms',
     },
     linkText: {
         textDecorationLine: 'underline',
-        color: '#7F7D8D',
+        color: colors.textMuted,
     },
 });

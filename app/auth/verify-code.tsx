@@ -1,23 +1,34 @@
-import { COLORS, FONTS } from '@/constants/theme';
+import { FONTS, LightTheme } from '@/constants/theme';
+import { useAppTheme } from '@/hooks/use-app-theme';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
     KeyboardAvoidingView,
+    NativeSyntheticEvent,
     Platform,
     ScrollView,
     StatusBar,
     Text,
     TextInput,
+    TextInputKeyPressEventData,
     TouchableOpacity,
     View,
+    useColorScheme
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScaledSheet } from 'react-native-size-matters';
 
 export default function VerifyCodeScreen() {
     const router = useRouter();
+    const colors = useAppTheme();
+    const colorScheme = useColorScheme();
+
+    const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
+    const inputsRef = useRef<Array<TextInput | null>>([]);
+
+    const styles = useMemo(() => getStyles(colors), [colors]);
 
     const handleBack = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -29,9 +40,41 @@ export default function VerifyCodeScreen() {
         router.push('/auth/reset-password');
     };
 
+    const handleOtpChange = (text: string, index: number) => {
+        const numericText = text.replace(/[^0-9]/g, '');
+        const newOtp = [...otp];
+        // If user paste a long code, we can handle basic case but standard is single digit at a time
+        newOtp[index] = numericText.slice(-1); 
+        setOtp(newOtp);
+
+        // Auto focus next
+        if (numericText && index < 5) {
+            inputsRef.current[index + 1]?.focus();
+        }
+    };
+
+    const handleOtpKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>, index: number) => {
+        if (e.nativeEvent.key === 'Backspace') {
+            // If current field is empty, go to previous field and clear it
+            if (!otp[index] && index > 0) {
+                const newOtp = [...otp];
+                newOtp[index - 1] = '';
+                setOtp(newOtp);
+                inputsRef.current[index - 1]?.focus();
+            } else if (otp[index]) {
+                // Just let normal flow clear it, but stay focused or move focus later?
+                // Standard react-native input behavior clears it, so usually no step required unless customizing deletion behavior
+            }
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+            <StatusBar
+                barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'}
+                backgroundColor="transparent"
+                translucent
+            />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
@@ -43,7 +86,7 @@ export default function VerifyCodeScreen() {
                 >
                     {/* Back Button */}
                     <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
-                        <Feather name="arrow-left" size={22} color={COLORS.textDark} />
+                        <Feather name="arrow-left" size={22} color={colors.textDark} />
                     </TouchableOpacity>
 
                     {/* Progress Indicator */}
@@ -68,15 +111,21 @@ export default function VerifyCodeScreen() {
                         <Text style={styles.subtitle}>We sent a 6-digit code to rafi**@gmail.com.</Text>
                     </View>
 
-                    {/* OTP Code Inputs (visual representation only per screenshot) */}
+                    {/* OTP Code Inputs */}
                     <View style={styles.otpWrapper}>
-                        {[...Array(6)].map((_, i) => (
-                            <View key={i} style={styles.otpBox}>
+                        {[0, 1, 2, 3, 4, 5].map((index) => (
+                            <View key={index} style={styles.otpBox}>
                                 <TextInput
+                                    ref={(el) => (inputsRef.current[index] = el)}
                                     style={styles.otpInput}
                                     keyboardType="numeric"
                                     maxLength={1}
                                     textAlign="center"
+                                    placeholderTextColor={colors.textMuted}
+                                    value={otp[index]}
+                                    onChangeText={(text) => handleOtpChange(text, index)}
+                                    onKeyPress={(e) => handleOtpKeyPress(e, index)}
+                                    selectTextOnFocus
                                 />
                             </View>
                         ))}
@@ -86,7 +135,7 @@ export default function VerifyCodeScreen() {
                     <View style={styles.resendWrapper}>
                         <Text style={styles.resendPrompt}>Didn't receive it? </Text>
                         <TouchableOpacity style={styles.resendBtn}>
-                            <Feather name="refresh-cw" size={12} color={COLORS.accentGreen} style={{ marginRight: 4 }} />
+                            <Feather name="refresh-cw" size={12} color={colors.accentGreen} style={{ marginRight: 4 }} />
                             <Text style={styles.resendText}>Resend code</Text>
                         </TouchableOpacity>
                     </View>
@@ -98,7 +147,7 @@ export default function VerifyCodeScreen() {
                             style={styles.primaryBtn}
                             onPress={handleVerify}
                         >
-                            <Text style={styles.primaryBtnText}>Sign In</Text>
+                            <Text style={styles.primaryBtnText}>Verify Code</Text>
                         </TouchableOpacity>
                     </View>
                 </ScrollView>
@@ -107,10 +156,10 @@ export default function VerifyCodeScreen() {
     );
 }
 
-const styles = ScaledSheet.create({
+const getStyles = (colors: typeof LightTheme) => ScaledSheet.create({
     container: {
         flex: 1,
-        backgroundColor: COLORS.background,
+        backgroundColor: colors.background,
     },
     scrollContainer: {
         paddingHorizontal: '24@ms',
@@ -121,7 +170,7 @@ const styles = ScaledSheet.create({
         width: '40@ms',
         height: '40@ms',
         borderRadius: '20@ms',
-        backgroundColor: '#EFEFF0',
+        backgroundColor: colors.btnSecondaryBg,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: '20@vs',
@@ -143,10 +192,10 @@ const styles = ScaledSheet.create({
         borderRadius: '2@vs',
     },
     progressBarActive: {
-        backgroundColor: '#8FA181',
+        backgroundColor: colors.primaryAlt,
     },
     progressBarInactive: {
-        backgroundColor: '#E5E4E2',
+        backgroundColor: colors.tabBgInactive,
     },
     progressText: {
         fontFamily: FONTS.sans,
@@ -154,10 +203,10 @@ const styles = ScaledSheet.create({
         letterSpacing: 0.5,
     },
     progressTextActive: {
-        color: COLORS.accentGreen,
+        color: colors.accentGreen,
     },
     progressTextInactive: {
-        color: '#A09EB3',
+        color: colors.textMuted,
     },
     header: {
         marginBottom: '35@vs',
@@ -167,14 +216,14 @@ const styles = ScaledSheet.create({
         fontSize: '38@ms',
         lineHeight: '42@ms',
         fontWeight: '600',
-        color: COLORS.textDark,
+        color: colors.textDark,
         marginBottom: '12@vs',
     },
     subtitle: {
         fontFamily: FONTS.sans,
         fontSize: '15@ms',
         lineHeight: '22@ms',
-        color: COLORS.accentGreen,
+        color: colors.accentGreen,
         letterSpacing: 0.2,
     },
     otpWrapper: {
@@ -185,7 +234,7 @@ const styles = ScaledSheet.create({
     otpBox: {
         width: '44@ms',
         height: '52@ms',
-        backgroundColor: COLORS.inputBg,
+        backgroundColor: colors.inputBg,
         borderRadius: '12@ms',
         justifyContent: 'center',
         alignItems: 'center',
@@ -194,7 +243,7 @@ const styles = ScaledSheet.create({
         fontFamily: FONTS.sans,
         fontSize: '20@ms',
         fontWeight: '600',
-        color: COLORS.textDark,
+        color: colors.textDark,
         width: '100%',
         height: '100%',
     },
@@ -207,7 +256,7 @@ const styles = ScaledSheet.create({
     resendPrompt: {
         fontFamily: FONTS.sans,
         fontSize: '13@ms',
-        color: '#7F7D8D',
+        color: colors.textMuted,
     },
     resendBtn: {
         flexDirection: 'row',
@@ -217,13 +266,13 @@ const styles = ScaledSheet.create({
         fontFamily: FONTS.sans,
         fontSize: '15@ms',
         fontWeight: '500',
-        color: COLORS.accentGreen,
+        color: colors.accentGreen,
     },
     footer: {
         marginTop: '10@vs',
     },
     primaryBtn: {
-        backgroundColor: COLORS.primaryAlt,
+        backgroundColor: colors.primaryAlt,
         height: '56@vs',
         width: '100%',
         borderRadius: '14@ms',
