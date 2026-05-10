@@ -19,13 +19,13 @@ import Svg, { Path } from 'react-native-svg';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TAB_BAR_WIDTH = SCREEN_WIDTH - ms(40); // accounting for left/right 20ms margins
-const TAB_HEIGHT = vs(68);
+const TAB_HEIGHT = vs(60);
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 // Configuration for the Bezier Curve Notch - Precision tuned to match visual reference
 const NOTCH_WIDTH = ms(75);
-const NOTCH_DEPTH = vs(40);
+const NOTCH_DEPTH = vs(36);
 const TAB_PADDING = ms(16); // Centralizes the icons by pushing them from the edges
 
 function CustomTabBar({ state, descriptors, navigation, colors }: BottomTabBarProps & { colors: typeof LightTheme }) {
@@ -68,7 +68,7 @@ function CustomTabBar({ state, descriptors, navigation, colors }: BottomTabBarPr
     });
 
     return (
-        <View style={[styles.tabBarContainer, { bottom: insets.bottom + vs(16), backgroundColor: colors.background }]}>
+        <View style={[styles.tabBarContainer, { bottom: insets.bottom + vs(8), backgroundColor: colors.background }]}>
             {/* Background SVG that slides the cutout */}
             <Svg width={TAB_BAR_WIDTH} height={TAB_HEIGHT} style={StyleSheet.absoluteFill}>
                 <AnimatedPath

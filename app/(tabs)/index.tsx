@@ -1,6 +1,7 @@
 import { LightTheme, FONTS } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,6 +21,7 @@ export default function DashboardScreen() {
     const colors = useAppTheme();
     const colorScheme = useColorScheme();
     const styles = useMemo(() => getStyles(colors), [colors]);
+    const router = useRouter();
 
     const familyMembers = [
         {
@@ -81,7 +83,10 @@ export default function DashboardScreen() {
                         <Text style={styles.metrics}>2 profiles · 6 memories preserved</Text>
                     </View>
                     <View style={styles.headerRight}>
-                        <TouchableOpacity style={styles.notificationBtn}>
+                        <TouchableOpacity 
+                            style={styles.notificationBtn}
+                            onPress={() => router.push('/notifications')}
+                        >
                             <MaterialCommunityIcons name="bell-outline" size={26} color={colors.primaryAlt} />
                             <View style={styles.notificationDot} />
                         </TouchableOpacity>
