@@ -1,9 +1,9 @@
+import { FONTS, LightTheme } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
-import { LightTheme, FONTS } from '@/constants/theme';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     KeyboardAvoidingView,
     Platform,
@@ -23,14 +23,15 @@ export default function SignInScreen() {
     const router = useRouter();
     const colors = useAppTheme();
     const colorScheme = useColorScheme();
+    const [isSignIn, setIsSignIn] = useState(true);
     const [isSecure, setIsSecure] = useState(true);
     const [isTermsAccepted, setIsTermsAccepted] = useState(false);
-    
+
     const styles = useMemo(() => getStyles(colors), [colors]);
 
-    const navigateToSignUp = () => {
+    const toggleAuthMode = (mode: boolean) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        router.replace('/auth/signup');
+        setIsSignIn(mode);
     };
 
     const handleBack = () => {
@@ -54,10 +55,10 @@ export default function SignInScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar 
-              barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} 
-              backgroundColor="transparent" 
-              translucent 
+            <StatusBar
+                barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'}
+                backgroundColor="transparent"
+                translucent
             />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -74,27 +75,35 @@ export default function SignInScreen() {
                     </TouchableOpacity>
 
                     {/* Header */}
-                    <View style={styles.header}>
-                        <Text style={styles.title}>Welcome back.</Text>
-                        <Text style={styles.subtitle}>Sign in to access your archive.</Text>
-                    </View>
+                    <Animated.View layout={Layout.springify()} style={styles.header}>
+                        <Text style={styles.title}>
+                            {isSignIn ? "Welcome back." : "Begin your legacy"}
+                        </Text>
+                        <Text style={styles.subtitle}>
+                            {isSignIn
+                                ? "Sign in to access your archive."
+                                : "start preserving memories."
+                            }
+                        </Text>
+                    </Animated.View>
 
                     {/* Tab Control */}
                     <View style={styles.tabContainer}>
                         <TouchableOpacity
                             activeOpacity={0.9}
-                            style={[styles.tab, styles.tabActive]}
+                            onPress={() => toggleAuthMode(true)}
+                            style={[styles.tab, isSignIn ? styles.tabActive : styles.tabInactive]}
                         >
-                            <Text style={[styles.tabText, styles.tabTextActive]}>
+                            <Text style={[styles.tabText, isSignIn ? styles.tabTextActive : styles.tabTextInactive]}>
                                 Sign In
                             </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                             activeOpacity={0.9}
-                            onPress={navigateToSignUp}
-                            style={[styles.tab, styles.tabInactive]}
+                            onPress={() => toggleAuthMode(false)}
+                            style={[styles.tab, !isSignIn ? styles.tabActive : styles.tabInactive]}
                         >
-                            <Text style={[styles.tabText, styles.tabTextInactive]}>
+                            <Text style={[styles.tabText, !isSignIn ? styles.tabTextActive : styles.tabTextInactive]}>
                                 Create Account
                             </Text>
                         </TouchableOpacity>
@@ -102,6 +111,20 @@ export default function SignInScreen() {
 
                     {/* Form Inputs */}
                     <Animated.View layout={Layout.springify()} style={styles.formContainer}>
+                        {!isSignIn && (
+                            <Animated.View entering={FadeIn} style={styles.inputGroup}>
+                                <Text style={styles.label}>Your Name</Text>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        placeholder="e.g. Sarah Mitchell"
+                                        placeholderTextColor={colors.textMuted}
+                                        style={styles.input}
+                                        autoCapitalize="words"
+                                    />
+                                </View>
+                            </Animated.View>
+                        )}
+
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Email address</Text>
                             <View style={styles.inputWrapper}>
@@ -139,11 +162,28 @@ export default function SignInScreen() {
                             </View>
                         </View>
 
-                        <Animated.View entering={FadeIn} style={styles.forgotContainer}>
-                            <TouchableOpacity onPress={handleForgotPassword}>
-                                <Text style={styles.forgotText}>Forgot password?</Text>
-                            </TouchableOpacity>
-                        </Animated.View>
+                        {!isSignIn && (
+                            <Animated.View entering={FadeIn} style={styles.inputGroup}>
+                                <Text style={styles.label}>Confirm Password</Text>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        placeholder="Re-enter your password"
+                                        placeholderTextColor={colors.textMuted}
+                                        style={styles.input}
+                                        secureTextEntry={isSecure}
+                                        autoCapitalize="none"
+                                    />
+                                </View>
+                            </Animated.View>
+                        )}
+
+                        {isSignIn && (
+                            <Animated.View entering={FadeIn} style={styles.forgotContainer}>
+                                <TouchableOpacity onPress={handleForgotPassword}>
+                                    <Text style={styles.forgotText}>Forgot password?</Text>
+                                </TouchableOpacity>
+                            </Animated.View>
+                        )}
                     </Animated.View>
 
                     {/* Primary Actions */}
@@ -153,7 +193,9 @@ export default function SignInScreen() {
                             style={styles.primaryBtn}
                             onPress={handleSubmit}
                         >
-                            <Text style={styles.primaryBtnText}>Sign In</Text>
+                            <Text style={styles.primaryBtnText}>
+                                {isSignIn ? "Sign In" : "Create Account"}
+                            </Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
