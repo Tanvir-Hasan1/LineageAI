@@ -15,7 +15,7 @@ import {
     View,
     useColorScheme
 } from 'react-native';
-import Animated, { FadeIn, Layout } from 'react-native-reanimated';
+import Animated, { FadeIn, Layout, LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScaledSheet } from 'react-native-size-matters';
 
@@ -89,10 +89,16 @@ export default function SignInScreen() {
 
                     {/* Tab Control */}
                     <View style={styles.tabContainer}>
+                        <View style={styles.indicatorWrapper}>
+                            {!isSignIn && <View style={{ flex: 1 }} />}
+                            <Animated.View layout={LinearTransition} style={[styles.tab, styles.tabActive]} />
+                            {isSignIn && <View style={{ flex: 1 }} />}
+                        </View>
+
                         <TouchableOpacity
                             activeOpacity={0.9}
                             onPress={() => toggleAuthMode(true)}
-                            style={[styles.tab, isSignIn ? styles.tabActive : styles.tabInactive]}
+                            style={styles.tab}
                         >
                             <Text style={[styles.tabText, isSignIn ? styles.tabTextActive : styles.tabTextInactive]}>
                                 Sign In
@@ -101,7 +107,7 @@ export default function SignInScreen() {
                         <TouchableOpacity
                             activeOpacity={0.9}
                             onPress={() => toggleAuthMode(false)}
-                            style={[styles.tab, !isSignIn ? styles.tabActive : styles.tabInactive]}
+                            style={styles.tab}
                         >
                             <Text style={[styles.tabText, !isSignIn ? styles.tabTextActive : styles.tabTextInactive]}>
                                 Create Account
@@ -262,6 +268,15 @@ const getStyles = (colors: typeof LightTheme) => ScaledSheet.create({
         padding: '4@ms',
         height: '45@vs',
         marginBottom: '30@vs',
+        overflow: 'hidden',
+    },
+    indicatorWrapper: {
+        position: 'absolute',
+        top: '4@ms',
+        bottom: '4@ms',
+        left: '4@ms',
+        right: '4@ms',
+        flexDirection: 'row',
     },
     tab: {
         flex: 1,
