@@ -140,6 +140,15 @@ export default function ProfileScreen() {
                 
                 {/* Header Vector: Avatar & Name Composite */}
                 <View style={styles.avatarHeader}>
+                    <TouchableOpacity 
+                        onPress={() => {
+                            triggerHaptic();
+                            router.back();
+                        }}
+                        style={styles.backButton}
+                    >
+                        <Feather name="arrow-left" size={ms(24)} color={palette.textDark} />
+                    </TouchableOpacity>
                     <View style={styles.avatarComposite}>
                         <Image 
                             source={require('@/assets/images/dashboard/avatar.png')} 
@@ -291,6 +300,11 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: vs(30),
+    },
+    backButton: {
+        marginRight: ms(16),
+        padding: ms(4),
+        marginLeft: -ms(4),
     },
     avatarComposite: {
         position: 'relative',

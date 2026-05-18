@@ -12,12 +12,13 @@ import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { useAuthStore } from '@/store/auth-store';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { AnimatedSplashScreen } from '@/components/AnimatedSplashScreen';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -29,6 +30,7 @@ export const unstable_settings = {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const initializeAuth = useAuthStore(state => state.initialize);
+  const [isSplashAnimationComplete, setIsSplashAnimationComplete] = useState(false);
 
   const [loaded, error] = useFonts({
     'PlayfairDisplay': PlayfairDisplay_400Regular,
@@ -49,6 +51,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (loaded) {
+      // Hide the native splash screen to reveal our custom AnimatedSplashScreen
       SplashScreen.hideAsync();
     }
   }, [loaded]);
@@ -66,6 +69,13 @@ export default function RootLayout() {
           <Stack.Screen name="auth" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
+        
+        {!isSplashAnimationComplete && (
+          <AnimatedSplashScreen 
+            isAppReady={loaded} 
+            onComplete={() => setIsSplashAnimationComplete(true)} 
+          />
+        )}
       </ThemeProvider>
     </GestureHandlerRootView>
   );
