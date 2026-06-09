@@ -3,7 +3,7 @@ import { useAppTheme } from '@/hooks/use-app-theme';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
     KeyboardAvoidingView,
     Platform,
@@ -13,15 +13,21 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    useColorScheme
+    useColorScheme,
+    Alert,
+    ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScaledSheet } from 'react-native-size-matters';
+import { api } from '@/services/api';
 
 export default function ForgotPasswordScreen() {
     const router = useRouter();
     const colors = useAppTheme();
     const colorScheme = useColorScheme();
+
+    const [email, setEmail] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
 
     const styles = useMemo(() => getStyles(colors), [colors]);
 
@@ -30,10 +36,37 @@ export default function ForgotPasswordScreen() {
         router.back();
     };
 
-    const handleSendCode = () => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        // Push to verify-code screen, simulating the flow
-        router.push('/auth/verify-code');
+    const handleSendCode = async () => {
+        const trimmedEmail = email.trim();
+        if (!trimmedEmail) {
+            Alert.alert('Validation Error', 'Please enter your email address.');
+            return;
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(trimmedEmail)) {
+            Alert.alert('Validation Error', 'Please enter a valid email address.');
+            return;
+        }
+
+        setIsLoading(true);
+                try {
+            const response = await api.post('/auth/forgot-password', { email: trimmedEmail });
+            console.log('[Forgot Password Response]', response);
+            if (response.success && response.data) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                router.push({
+                    pathname: '/auth/verify-code',
+                    params: { email: trimmedEmail }
+                });
+            } else {
+                Alert.alert('Error', response.message || 'Failed to send reset code. Please try again.');
+            }
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'A network error occurred. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -53,7 +86,7 @@ export default function ForgotPasswordScreen() {
                     keyboardShouldPersistTaps="handled"
                 >
                     {/* Back Button */}
-                    <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
+                    <TouchableOpacity onPress={handleBack} style={styles.backBtn} disabled={isLoading}>
                         <Feather name="arrow-left" size={22} color={colors.textDark} />
                     </TouchableOpacity>
 
@@ -91,6 +124,9 @@ export default function ForgotPasswordScreen() {
                                     keyboardType="email-address"
                                     autoCapitalize="none"
                                     autoCorrect={false}
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    editable={!isLoading}
                                 />
                             </View>
                         </View>
@@ -100,10 +136,15 @@ export default function ForgotPasswordScreen() {
                     <View style={styles.footer}>
                         <TouchableOpacity
                             activeOpacity={0.8}
-                            style={styles.primaryBtn}
+                            style={[styles.primaryBtn, isLoading && { opacity: 0.7 }]}
                             onPress={handleSendCode}
+                            disabled={isLoading}
                         >
-                            <Text style={styles.primaryBtnText}>Send Reset Code</Text>
+                            {isLoading ? (
+                                <ActivityIndicator color="#FFFFFF" size="small" />
+                            ) : (
+                                <Text style={styles.primaryBtnText}>Send Reset Code</Text>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </ScrollView>

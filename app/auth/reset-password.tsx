@@ -2,7 +2,7 @@ import { useAppTheme } from '@/hooks/use-app-theme';
 import { LightTheme, FONTS } from '@/constants/theme';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useState, useMemo } from 'react';
 import {
     KeyboardAvoidingView,
@@ -13,18 +13,27 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    useColorScheme
+    useColorScheme,
+    Alert,
+    ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScaledSheet } from 'react-native-size-matters';
+import { api } from '@/services/api';
 
 export default function ResetPasswordScreen() {
     const router = useRouter();
     const colors = useAppTheme();
     const colorScheme = useColorScheme();
+    const { email, resetToken } = useLocalSearchParams<{ email: string; resetToken: string }>();
+
     const [isSecure, setIsSecure] = useState(true);
     const [isConfirmSecure, setIsConfirmSecure] = useState(true);
     
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
     const styles = useMemo(() => getStyles(colors), [colors]);
 
     const handleBack = () => {
@@ -32,9 +41,43 @@ export default function ResetPasswordScreen() {
         router.back();
     };
 
-    const handleReset = () => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.push('/auth/reset-success');
+    const handleReset = async () => {
+        if (!password) {
+            Alert.alert('Validation Error', 'Please enter your new password.');
+            return;
+        }
+
+        if (password.length < 6) {
+            Alert.alert('Validation Error', 'Password must be at least 6 characters.');
+            return;
+        }
+
+        if (password !== confirmPassword) {
+            Alert.alert('Validation Error', 'Passwords do not match.');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const response = await api.post('/auth/forgot-password/reset', {
+                email,
+                resetToken,
+                password,
+                confirmPassword
+            });
+            console.log('[Reset Password Response]', response);
+
+            if (response.success && response.data) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                router.push('/auth/reset-success');
+            } else {
+                Alert.alert('Error', response.message || 'Failed to reset password. Please try again.');
+            }
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'A network error occurred. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -54,7 +97,7 @@ export default function ResetPasswordScreen() {
                     keyboardShouldPersistTaps="handled"
                 >
                     {/* Back Button */}
-                    <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
+                    <TouchableOpacity onPress={handleBack} style={styles.backBtn} disabled={isLoading}>
                         <Feather name="arrow-left" size={22} color={colors.textDark} />
                     </TouchableOpacity>
 
@@ -91,10 +134,14 @@ export default function ResetPasswordScreen() {
                                     style={[styles.input, { paddingRight: 45 }]}
                                     secureTextEntry={isSecure}
                                     autoCapitalize="none"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    editable={!isLoading}
                                 />
                                 <TouchableOpacity
                                     onPress={() => setIsSecure(!isSecure)}
                                     style={styles.eyeBtn}
+                                    disabled={isLoading}
                                 >
                                     <Feather
                                         name={isSecure ? 'eye-off' : 'eye'}
@@ -114,10 +161,14 @@ export default function ResetPasswordScreen() {
                                     style={[styles.input, { paddingRight: 45 }]}
                                     secureTextEntry={isConfirmSecure}
                                     autoCapitalize="none"
+                                    value={confirmPassword}
+                                    onChangeText={setConfirmPassword}
+                                    editable={!isLoading}
                                 />
                                 <TouchableOpacity
                                     onPress={() => setIsConfirmSecure(!isConfirmSecure)}
                                     style={styles.eyeBtn}
+                                    disabled={isLoading}
                                 >
                                     <Feather
                                         name={isConfirmSecure ? 'eye-off' : 'eye'}
@@ -133,10 +184,15 @@ export default function ResetPasswordScreen() {
                     <View style={styles.footer}>
                         <TouchableOpacity
                             activeOpacity={0.8}
-                            style={styles.primaryBtn}
+                            style={[styles.primaryBtn, isLoading && { opacity: 0.7 }]}
                             onPress={handleReset}
+                            disabled={isLoading}
                         >
-                            <Text style={styles.primaryBtnText}>Reset Password</Text>
+                            {isLoading ? (
+                                <ActivityIndicator color="#FFFFFF" size="small" />
+                            ) : (
+                                <Text style={styles.primaryBtnText}>Reset Password</Text>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </ScrollView>

@@ -2,10 +2,12 @@ import { ApiError, ApiRequestOptions, ApiResponse } from '@/types/api';
 import { SecureStorageService } from '@/utils/storage';
 
 // Replace with your production base API URL
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://triangle-printed-different-celebration.trycloudflare.com/api/v1';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || '';
 
 class ApiClient {
   private baseUrl: string;
+  private isRefreshing = false;
+  private refreshSubscribers: ((token: string) => void)[] = [];
 
   constructor(baseUrl: string = BASE_URL) {
     this.baseUrl = baseUrl;
@@ -57,9 +59,53 @@ class ApiClient {
 
     try {
       const response = await fetch(url, config);
-      
+
       if (__DEV__) {
         console.log(`[API Response] ${response.status} <- ${url}`);
+      }
+
+      // Intercept 401 and refresh token if possible, BEFORE parsing JSON
+      if (response.status === 401 && path !== '/auth/refresh' && !options._retry) {
+        options._retry = true;
+        const success = await this.refreshTokens();
+        if (success) {
+          // Re-inject the new authorization header
+          const newToken = await SecureStorageService.getItem('authToken');
+          if (newToken) {
+            headers.set('Authorization', `Bearer ${newToken}`);
+          }
+          const retryConfig = { ...config, headers };
+          
+          if (__DEV__) {
+            console.log(`[API Retry Request] ${retryConfig.method || 'GET'} -> ${url}`);
+          }
+          
+          const retryResponse = await fetch(url, retryConfig);
+          if (retryResponse.status === 204) {
+            return { success: true, data: null, status: 204 };
+          }
+          
+          let retryJson: any = null;
+          try {
+            retryJson = await retryResponse.json();
+          } catch (e) {
+            // Safe fallback if JSON parsing fails on retry response
+          }
+          
+          if (!retryResponse.ok) {
+            const errorMsg = retryJson?.error?.message || retryJson?.message || `Request failed with status ${retryResponse.status}`;
+            throw {
+              message: errorMsg,
+              statusCode: retryResponse.status,
+              errors: retryJson?.error?.details || retryJson?.errors,
+            } as ApiError;
+          }
+          return {
+            success: true,
+            data: retryJson,
+            status: retryResponse.status,
+          };
+        }
       }
 
       // Check if response has no content
@@ -67,7 +113,12 @@ class ApiClient {
         return { success: true, data: null, status: 204 };
       }
 
-      const json = await response.json();
+      let json: any = null;
+      try {
+        json = await response.json();
+      } catch (jsonErr) {
+        // Safe fallback if response has no JSON body
+      }
 
       if (!response.ok) {
         const errorMsg = json?.error?.message || json?.message || `Request failed with status ${response.status}`;
@@ -99,6 +150,105 @@ class ApiClient {
         message: apiError.message,
         status: apiError.statusCode,
       };
+    }
+  }
+
+  /**
+   * Token refresh handler using the persisted refreshToken.
+   */
+  private async refreshTokens(): Promise<boolean> {
+    if (this.isRefreshing) {
+      return new Promise<boolean>((resolve) => {
+        this.refreshSubscribers.push((token) => {
+          resolve(!!token);
+        });
+      });
+    }
+
+    this.isRefreshing = true;
+
+    try {
+      const refreshToken = await SecureStorageService.getItem('refreshToken');
+      if (!refreshToken) {
+        this.handleRefreshFailure();
+        return false;
+      }
+
+      const refreshUrl = `${this.baseUrl}/auth/refresh`;
+      
+      if (__DEV__) {
+        console.log(`[API Token Refresh] POST -> ${refreshUrl}`);
+      }
+
+      const response = await fetch(refreshUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (__DEV__) {
+        console.log(`[API Token Refresh Response] status: ${response.status}`);
+      }
+
+      if (!response.ok) {
+        this.handleRefreshFailure();
+        return false;
+      }
+
+      const json = await response.json();
+      if (json.success && json.data && json.data.tokens) {
+        const { tokens, user } = json.data;
+        
+        // Dynamically require useAuthStore to avoid circular dependencies
+        const { useAuthStore } = require('@/store/auth-store');
+        
+        const nameParts = (user?.name || '').trim().split(/\s+/);
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+        const mappedUser = {
+          ...user,
+          firstName,
+          lastName,
+        };
+
+        await useAuthStore.getState().signIn(tokens.accessToken, tokens.refreshToken || null, mappedUser);
+
+        this.onTokenRefreshed(tokens.accessToken);
+        return true;
+      } else {
+        this.handleRefreshFailure();
+        return false;
+      }
+    } catch (err) {
+      console.error('[API Token Refresh Error]', err);
+      this.handleRefreshFailure();
+      return false;
+    } finally {
+      this.isRefreshing = false;
+    }
+  }
+
+  private onTokenRefreshed(token: string) {
+    this.refreshSubscribers.forEach((cb) => cb(token));
+    this.refreshSubscribers = [];
+  }
+
+  private handleRefreshFailure() {
+    this.onTokenRefreshed('');
+    
+    // Dynamically sign out
+    const { useAuthStore } = require('@/store/auth-store');
+    useAuthStore.getState().signOut();
+    
+    // Redirect to sign in page
+    const { router } = require('expo-router');
+    try {
+      router.replace('/auth/signin');
+    } catch (e) {
+      console.error('Failed to redirect to signin:', e);
     }
   }
 

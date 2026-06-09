@@ -2,7 +2,7 @@ import { FONTS, LightTheme } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useRef, useState } from 'react';
 import {
     KeyboardAvoidingView,
@@ -15,17 +15,23 @@ import {
     TextInputKeyPressEventData,
     TouchableOpacity,
     View,
-    useColorScheme
+    useColorScheme,
+    Alert,
+    ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScaledSheet } from 'react-native-size-matters';
+import { api } from '@/services/api';
 
 export default function VerifyCodeScreen() {
     const router = useRouter();
     const colors = useAppTheme();
     const colorScheme = useColorScheme();
+    const { email } = useLocalSearchParams<{ email: string }>();
 
     const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isResending, setIsResending] = useState(false);
     const inputsRef = useRef<Array<TextInput | null>>([]);
 
     const styles = useMemo(() => getStyles(colors), [colors]);
@@ -35,15 +41,69 @@ export default function VerifyCodeScreen() {
         router.back();
     };
 
-    const handleVerify = () => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.push('/auth/reset-password');
+    const handleVerify = async () => {
+        const code = otp.join('');
+        if (code.length < 6) {
+            Alert.alert('Validation Error', 'Please enter the complete 6-digit code.');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const response = await api.post('/auth/forgot-password/verify-code', {
+                email: email,
+                code: code
+            });
+            console.log('[Verify Code Response]', response);
+
+            if (response.success && response.data) {
+                const resetToken = response.data.data?.resetToken;
+                if (!resetToken) {
+                    Alert.alert('Error', 'Verification succeeded, but no reset token was returned.');
+                    return;
+                }
+
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                router.push({
+                    pathname: '/auth/reset-password',
+                    params: { email, resetToken }
+                });
+            } else {
+                Alert.alert('Error', response.message || 'Verification failed. Please check your code.');
+            }
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'A network error occurred. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleResendCode = async () => {
+        if (!email) {
+            Alert.alert('Error', 'No email address found.');
+            return;
+        }
+
+        setIsResending(true);
+        try {
+            const response = await api.post('/auth/forgot-password', { email });
+            console.log('[Resend Code Response]', response);
+            if (response.success && response.data) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Alert.alert('Success', 'A new 6-digit reset code has been sent to your email.');
+            } else {
+                Alert.alert('Error', response.message || 'Failed to resend code.');
+            }
+        } catch (error: any) {
+            Alert.alert('Error', error.message || 'A network error occurred. Please try again.');
+        } finally {
+            setIsResending(false);
+        }
     };
 
     const handleOtpChange = (text: string, index: number) => {
         const numericText = text.replace(/[^0-9]/g, '');
         const newOtp = [...otp];
-        // If user paste a long code, we can handle basic case but standard is single digit at a time
         newOtp[index] = numericText.slice(-1); 
         setOtp(newOtp);
 
@@ -55,15 +115,11 @@ export default function VerifyCodeScreen() {
 
     const handleOtpKeyPress = (e: NativeSyntheticEvent<TextInputKeyPressEventData>, index: number) => {
         if (e.nativeEvent.key === 'Backspace') {
-            // If current field is empty, go to previous field and clear it
             if (!otp[index] && index > 0) {
                 const newOtp = [...otp];
                 newOtp[index - 1] = '';
                 setOtp(newOtp);
                 inputsRef.current[index - 1]?.focus();
-            } else if (otp[index]) {
-                // Just let normal flow clear it, but stay focused or move focus later?
-                // Standard react-native input behavior clears it, so usually no step required unless customizing deletion behavior
             }
         }
     };
@@ -85,7 +141,7 @@ export default function VerifyCodeScreen() {
                     keyboardShouldPersistTaps="handled"
                 >
                     {/* Back Button */}
-                    <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
+                    <TouchableOpacity onPress={handleBack} style={styles.backBtn} disabled={isLoading || isResending}>
                         <Feather name="arrow-left" size={22} color={colors.textDark} />
                     </TouchableOpacity>
 
@@ -108,7 +164,7 @@ export default function VerifyCodeScreen() {
                     {/* Header */}
                     <View style={styles.header}>
                         <Text style={styles.title}>Check your email.</Text>
-                        <Text style={styles.subtitle}>We sent a 6-digit code to rafi**@gmail.com.</Text>
+                        <Text style={styles.subtitle}>We sent a 6-digit code to {email || 'your email'}.</Text>
                     </View>
 
                     {/* OTP Code Inputs */}
@@ -126,6 +182,7 @@ export default function VerifyCodeScreen() {
                                     onChangeText={(text) => handleOtpChange(text, index)}
                                     onKeyPress={(e) => handleOtpKeyPress(e, index)}
                                     selectTextOnFocus
+                                    editable={!isLoading}
                                 />
                             </View>
                         ))}
@@ -134,8 +191,16 @@ export default function VerifyCodeScreen() {
                     {/* Resend Link */}
                     <View style={styles.resendWrapper}>
                         <Text style={styles.resendPrompt}>Didn't receive it? </Text>
-                        <TouchableOpacity style={styles.resendBtn}>
-                            <Feather name="refresh-cw" size={12} color={colors.accentGreen} style={{ marginRight: 4 }} />
+                        <TouchableOpacity 
+                            style={styles.resendBtn} 
+                            onPress={handleResendCode}
+                            disabled={isLoading || isResending}
+                        >
+                            {isResending ? (
+                                <ActivityIndicator color={colors.accentGreen} size="small" style={{ marginRight: 4 }} />
+                            ) : (
+                                <Feather name="refresh-cw" size={12} color={colors.accentGreen} style={{ marginRight: 4 }} />
+                            )}
                             <Text style={styles.resendText}>Resend code</Text>
                         </TouchableOpacity>
                     </View>
@@ -144,10 +209,15 @@ export default function VerifyCodeScreen() {
                     <View style={styles.footer}>
                         <TouchableOpacity
                             activeOpacity={0.8}
-                            style={styles.primaryBtn}
+                            style={[styles.primaryBtn, isLoading && { opacity: 0.7 }]}
                             onPress={handleVerify}
+                            disabled={isLoading}
                         >
-                            <Text style={styles.primaryBtnText}>Verify Code</Text>
+                            {isLoading ? (
+                                <ActivityIndicator color="#FFFFFF" size="small" />
+                            ) : (
+                                <Text style={styles.primaryBtnText}>Verify Code</Text>
+                            )}
                         </TouchableOpacity>
                     </View>
                 </ScrollView>

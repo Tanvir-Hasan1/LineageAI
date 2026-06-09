@@ -25,6 +25,10 @@ export default function ProfileScreen() {
     const router = useRouter();
     const { user, signOut } = useAuth();
     const isDarkMode = useColorScheme() === 'dark';
+    
+    if (__DEV__) {
+        console.log('[Profile Screen] Current user state:', JSON.stringify(user, null, 2));
+    }
 
     // Local State For Interactive Preference Switches
     const [notifications, setNotifications] = useState(true);

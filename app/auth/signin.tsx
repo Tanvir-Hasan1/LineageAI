@@ -139,6 +139,10 @@ export default function SignInScreen() {
                 Alert.alert('Validation Error', 'Please enter your password.');
                 return;
             }
+            if (!isTermsAccepted) {
+                Alert.alert('Validation Error', 'Please accept the Terms & Privacy Policy.');
+                return;
+            }
 
             setIsLoading(true);
             try {

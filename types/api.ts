@@ -29,4 +29,5 @@ export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 export interface ApiRequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean>;
   requireAuth?: boolean;
+  _retry?: boolean;
 }

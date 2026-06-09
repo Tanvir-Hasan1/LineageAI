@@ -7,6 +7,7 @@ export interface AuthStore extends AuthState {
   signOut: () => Promise<void>;
   updateUser: (userData: Partial<User>) => Promise<void>;
   initialize: () => Promise<void>;
+  fetchProfile: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
@@ -31,12 +32,37 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
           refreshToken: storedRefreshToken,
           isLoading: false,
         });
+
+        // Silently fetch and sync fresh profile data from /auth/me in background
+        get().fetchProfile().catch((err) => console.error('Silent profile sync failed:', err));
       } else {
         set({ isLoading: false });
       }
     } catch (error) {
       console.error('Auth store initialization error:', error);
       set({ isLoading: false });
+    }
+  },
+
+  fetchProfile: async () => {
+    try {
+      const { api } = require('@/services/api');
+      const response = await api.get('/auth/me');
+      if (response.success && response.data && response.data.data) {
+        const { user } = response.data.data;
+        const nameParts = (user?.name || '').trim().split(/\s+/);
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+        const mappedUser = {
+          ...user,
+          firstName,
+          lastName,
+        };
+        set({ user: mappedUser });
+        await SecureStorageService.setItem('authUser', JSON.stringify(mappedUser));
+      }
+    } catch (error) {
+      console.error('Failed to sync user profile from /auth/me:', error);
     }
   },
 
