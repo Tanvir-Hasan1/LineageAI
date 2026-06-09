@@ -73,6 +73,8 @@ export const DarkTheme = {
   black: '#000000',
 };
 
+export type AppTheme = typeof LightTheme;
+
 // Temporary back-compatibility mapping so imports don't immediately crash
 export const COLORS = LightTheme;
 

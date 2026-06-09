@@ -3,7 +3,7 @@ import { User, AuthState } from '@/types/auth';
 import { SecureStorageService } from '@/utils/storage';
 
 export interface AuthStore extends AuthState {
-  signIn: (token: string, userData: User) => Promise<void>;
+  signIn: (token: string, refreshToken: string | null, userData: User) => Promise<void>;
   signOut: () => Promise<void>;
   updateUser: (userData: Partial<User>) => Promise<void>;
   initialize: () => Promise<void>;
@@ -13,11 +13,13 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   isAuthenticated: false,
   user: null,
   token: null,
+  refreshToken: null,
   isLoading: true,
 
   initialize: async () => {
     try {
       const storedToken = await SecureStorageService.getItem('authToken');
+      const storedRefreshToken = await SecureStorageService.getItem('refreshToken');
       const storedUser = await SecureStorageService.getItem('authUser');
 
       if (storedToken && storedUser) {
@@ -26,6 +28,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
           isAuthenticated: true,
           user: parsedUser,
           token: storedToken,
+          refreshToken: storedRefreshToken,
           isLoading: false,
         });
       } else {
@@ -37,15 +40,21 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     }
   },
 
-  signIn: async (token: string, userData: User) => {
+  signIn: async (token: string, refreshToken: string | null, userData: User) => {
     try {
       await SecureStorageService.setItem('authToken', token);
+      if (refreshToken) {
+        await SecureStorageService.setItem('refreshToken', refreshToken);
+      } else {
+        await SecureStorageService.removeItem('refreshToken');
+      }
       await SecureStorageService.setItem('authUser', JSON.stringify(userData));
 
       set({
         isAuthenticated: true,
         user: userData,
         token,
+        refreshToken,
         isLoading: false,
       });
     } catch (error) {
@@ -57,12 +66,14 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   signOut: async () => {
     try {
       await SecureStorageService.removeItem('authToken');
+      await SecureStorageService.removeItem('refreshToken');
       await SecureStorageService.removeItem('authUser');
 
       set({
         isAuthenticated: false,
         user: null,
         token: null,
+        refreshToken: null,
         isLoading: false,
       });
     } catch (error) {

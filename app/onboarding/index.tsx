@@ -20,7 +20,8 @@ import Animated, {
   useAnimatedStyle, 
   useSharedValue, 
   withSpring, 
-  withTiming 
+  withTiming,
+  SharedValue
 } from 'react-native-reanimated';
 import { ms, s } from 'react-native-size-matters';
 
@@ -40,7 +41,7 @@ const SLIDES = [
 ];
 
 // Specialized Animated Dot Component
-const AnimatedDot = ({ index, activeIndex }: { index: number, activeIndex: Animated.SharedValue<number> }) => {
+const AnimatedDot = ({ index, activeIndex }: { index: number, activeIndex: SharedValue<number> }) => {
   const activeWidth = s(24);
   const inactiveWidth = s(8);
 

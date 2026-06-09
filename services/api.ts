@@ -2,7 +2,7 @@ import { ApiError, ApiRequestOptions, ApiResponse } from '@/types/api';
 import { SecureStorageService } from '@/utils/storage';
 
 // Replace with your production base API URL
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.lineageai.example.com/v1';
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://triangle-printed-different-celebration.trycloudflare.com/api/v1';
 
 class ApiClient {
   private baseUrl: string;
@@ -70,11 +70,11 @@ class ApiClient {
       const json = await response.json();
 
       if (!response.ok) {
-        const errorMsg = json?.message || `Request failed with status ${response.status}`;
+        const errorMsg = json?.error?.message || json?.message || `Request failed with status ${response.status}`;
         throw {
           message: errorMsg,
           statusCode: response.status,
-          errors: json?.errors,
+          errors: json?.error?.details || json?.errors,
         } as ApiError;
       }
 

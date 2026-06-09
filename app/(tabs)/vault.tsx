@@ -210,7 +210,7 @@ export default function MemoryVaultScreen() {
                                     </View>
                                 )}
                                 <View style={{ flex: 1, marginLeft: !item.image ? ms(12) : 0 }}>
-                                    <Text style={[styles.cardTitle, { color: isDarkMode ? '#8EA281' : colors.cardTitle }]}>{item.title}</Text>
+                                    <Text style={[styles.cardTitle, { color: isDarkMode ? '#8EA281' : colors.textDark }]}>{item.title}</Text>
                                     <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
                                         {item.author} · {item.date}
                                     </Text>

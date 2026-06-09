@@ -19,9 +19,11 @@ import { FONTS } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
 import { SignOutModal } from '@/components/SignOutModal';
 import { DeleteAccountModal } from '@/components/DeleteAccountModal';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function ProfileScreen() {
     const router = useRouter();
+    const { user, signOut } = useAuth();
     const isDarkMode = useColorScheme() === 'dark';
 
     // Local State For Interactive Preference Switches
@@ -160,8 +162,12 @@ export default function ProfileScreen() {
                         </View>
                     </View>
                     <View style={styles.nameStack}>
-                        <Text style={[styles.profileName, { color: palette.textDark }]}>Sarah Mitchell</Text>
-                        <Text style={[styles.profileEmail, { color: palette.textMuted }]}>sarah@example.com</Text>
+                        <Text style={[styles.profileName, { color: palette.textDark }]}>
+                            {user?.name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Sarah Mitchell'}
+                        </Text>
+                        <Text style={[styles.profileEmail, { color: palette.textMuted }]}>
+                            {user?.email || 'sarah@example.com'}
+                        </Text>
                     </View>
                 </View>
 
@@ -266,10 +272,10 @@ export default function ProfileScreen() {
             <SignOutModal
                 visible={showSignOut}
                 onClose={() => setShowSignOut(false)}
-                onConfirm={() => {
+                onConfirm={async () => {
                     setShowSignOut(false);
-                    // Logically direct user back out to home/login if built
-                    router.replace('/'); 
+                    await signOut();
+                    router.replace('/auth/signin'); 
                 }}
             />
 

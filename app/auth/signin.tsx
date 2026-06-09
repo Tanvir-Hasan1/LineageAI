@@ -13,11 +13,15 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    useColorScheme
+    useColorScheme,
+    Alert,
+    ActivityIndicator
 } from 'react-native';
 import Animated, { FadeIn, Layout, LinearTransition } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScaledSheet } from 'react-native-size-matters';
+import { api } from '@/services/api';
+import { useAuthStore } from '@/store/auth-store';
 
 export default function SignInScreen() {
     const router = useRouter();
@@ -27,11 +31,23 @@ export default function SignInScreen() {
     const [isSecure, setIsSecure] = useState(true);
     const [isTermsAccepted, setIsTermsAccepted] = useState(false);
 
+    // Form inputs state
+    const [name, setName] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
     const styles = useMemo(() => getStyles(colors), [colors]);
 
     const toggleAuthMode = (mode: boolean) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setIsSignIn(mode);
+        // Clear forms on mode switch
+        setName('');
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
     };
 
     const handleBack = () => {
@@ -43,9 +59,127 @@ export default function SignInScreen() {
         }
     };
 
-    const handleSubmit = () => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        router.replace('/(tabs)');
+    const handleSubmit = async () => {
+        const trimmedEmail = email.trim();
+        const trimmedName = name.trim();
+
+        if (!isSignIn) {
+            if (!trimmedName) {
+                Alert.alert('Validation Error', 'Please enter your name.');
+                return;
+            }
+            if (!trimmedEmail) {
+                Alert.alert('Validation Error', 'Please enter your email address.');
+                return;
+            }
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(trimmedEmail)) {
+                Alert.alert('Validation Error', 'Please enter a valid email address.');
+                return;
+            }
+            if (password.length < 6) {
+                Alert.alert('Validation Error', 'Password must be at least 6 characters.');
+                return;
+            }
+            if (password !== confirmPassword) {
+                Alert.alert('Validation Error', 'Passwords do not match.');
+                return;
+            }
+            if (!isTermsAccepted) {
+                Alert.alert('Validation Error', 'Please accept the Terms & Privacy Policy.');
+                return;
+            }
+
+            setIsLoading(true);
+            try {
+                const response = await api.post('/auth/register', {
+                    name: trimmedName,
+                    email: trimmedEmail,
+                    password: password,
+                });
+
+                if (__DEV__) {
+                    console.log('[Register API Response]', JSON.stringify(response, null, 2));
+                }
+
+                if (response.success && response.data && response.data.data) {
+                    const { user, tokens } = response.data.data;
+                    if (!user || !tokens) {
+                        Alert.alert('Registration Failed', 'Invalid response format from server.');
+                        return;
+                    }
+                    const nameParts = (user.name || trimmedName).trim().split(/\s+/);
+                    const firstName = nameParts[0] || '';
+                    const lastName = nameParts.slice(1).join(' ') || '';
+
+                    const mappedUser = {
+                        ...user,
+                        firstName,
+                        lastName,
+                    };
+
+                    await useAuthStore.getState().signIn(tokens.accessToken, tokens.refreshToken || null, mappedUser);
+                    
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    router.replace('/(tabs)');
+                } else {
+                    Alert.alert('Registration Failed', response.message || 'An error occurred during registration.');
+                }
+            } catch (err: any) {
+                Alert.alert('Error', err?.message || 'A network error occurred. Please try again.');
+            } finally {
+                setIsLoading(false);
+            }
+        } else {
+            if (!trimmedEmail) {
+                Alert.alert('Validation Error', 'Please enter your email address.');
+                return;
+            }
+            if (!password) {
+                Alert.alert('Validation Error', 'Please enter your password.');
+                return;
+            }
+
+            setIsLoading(true);
+            try {
+                const response = await api.post('/auth/login', {
+                    email: trimmedEmail,
+                    password: password,
+                });
+
+                if (__DEV__) {
+                    console.log('[Login API Response]', JSON.stringify(response, null, 2));
+                }
+
+                if (response.success && response.data && response.data.data) {
+                    const { user, tokens } = response.data.data;
+                    if (!user || !tokens) {
+                        Alert.alert('Sign In Failed', 'Invalid response format from server.');
+                        return;
+                    }
+                    const nameParts = (user.name || '').trim().split(/\s+/);
+                    const firstName = nameParts[0] || '';
+                    const lastName = nameParts.slice(1).join(' ') || '';
+
+                    const mappedUser = {
+                        ...user,
+                        firstName,
+                        lastName,
+                    };
+
+                    await useAuthStore.getState().signIn(tokens.accessToken, tokens.refreshToken || null, mappedUser);
+
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    router.replace('/(tabs)');
+                } else {
+                    Alert.alert('Sign In Failed', response.message || 'Invalid email or password.');
+                }
+            } catch (err: any) {
+                Alert.alert('Error', err?.message || 'A network error occurred. Please try again.');
+            } finally {
+                setIsLoading(false);
+            }
+        }
     };
 
     const handleForgotPassword = () => {
@@ -126,6 +260,9 @@ export default function SignInScreen() {
                                         placeholderTextColor={colors.textMuted}
                                         style={styles.input}
                                         autoCapitalize="words"
+                                        value={name}
+                                        onChangeText={setName}
+                                        editable={!isLoading}
                                     />
                                 </View>
                             </Animated.View>
@@ -141,6 +278,9 @@ export default function SignInScreen() {
                                     keyboardType="email-address"
                                     autoCapitalize="none"
                                     autoCorrect={false}
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    editable={!isLoading}
                                 />
                             </View>
                         </View>
@@ -154,10 +294,14 @@ export default function SignInScreen() {
                                     style={[styles.input, { paddingRight: 45 }]}
                                     secureTextEntry={isSecure}
                                     autoCapitalize="none"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    editable={!isLoading}
                                 />
                                 <TouchableOpacity
                                     onPress={() => setIsSecure(!isSecure)}
                                     style={styles.eyeBtn}
+                                    disabled={isLoading}
                                 >
                                     <Feather
                                         name={isSecure ? 'eye-off' : 'eye'}
@@ -178,6 +322,9 @@ export default function SignInScreen() {
                                         style={styles.input}
                                         secureTextEntry={isSecure}
                                         autoCapitalize="none"
+                                        value={confirmPassword}
+                                        onChangeText={setConfirmPassword}
+                                        editable={!isLoading}
                                     />
                                 </View>
                             </Animated.View>
@@ -185,7 +332,7 @@ export default function SignInScreen() {
 
                         {isSignIn && (
                             <Animated.View entering={FadeIn} style={styles.forgotContainer}>
-                                <TouchableOpacity onPress={handleForgotPassword}>
+                                <TouchableOpacity onPress={handleForgotPassword} disabled={isLoading}>
                                     <Text style={styles.forgotText}>Forgot password?</Text>
                                 </TouchableOpacity>
                             </Animated.View>
@@ -196,18 +343,24 @@ export default function SignInScreen() {
                     <View style={styles.footer}>
                         <TouchableOpacity
                             activeOpacity={0.8}
-                            style={styles.primaryBtn}
+                            style={[styles.primaryBtn, isLoading && { opacity: 0.7 }]}
                             onPress={handleSubmit}
+                            disabled={isLoading}
                         >
-                            <Text style={styles.primaryBtnText}>
-                                {isSignIn ? "Sign In" : "Create Account"}
-                            </Text>
+                            {isLoading ? (
+                                <ActivityIndicator color="#FFFFFF" size="small" />
+                            ) : (
+                                <Text style={styles.primaryBtnText}>
+                                    {isSignIn ? "Sign In" : "Create Account"}
+                                </Text>
+                            )}
                         </TouchableOpacity>
 
                         <TouchableOpacity
                             activeOpacity={0.8}
-                            onPress={() => setIsTermsAccepted(!isTermsAccepted)}
+                            onPress={() => !isLoading && setIsTermsAccepted(!isTermsAccepted)}
                             style={styles.termsContainer}
+                            disabled={isLoading}
                         >
                             <View style={[styles.checkbox, isTermsAccepted && styles.checkboxChecked]}>
                                 {isTermsAccepted && <Ionicons name="checkmark" size={12} color="#FFF" />}

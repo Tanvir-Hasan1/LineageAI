@@ -116,7 +116,7 @@ export default function VerifyCodeScreen() {
                         {[0, 1, 2, 3, 4, 5].map((index) => (
                             <View key={index} style={styles.otpBox}>
                                 <TextInput
-                                    ref={(el) => (inputsRef.current[index] = el)}
+                                    ref={(el) => { inputsRef.current[index] = el; }}
                                     style={styles.otpInput}
                                     keyboardType="numeric"
                                     maxLength={1}

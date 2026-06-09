@@ -4,10 +4,14 @@
 export interface User {
   id: string;
   email: string;
+  name?: string;
   firstName?: string;
   lastName?: string;
+  role?: string;
+  isEmailVerified?: boolean;
   avatarUrl?: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 /**
@@ -26,5 +30,6 @@ export interface AuthState {
   isAuthenticated: boolean;
   user: User | null;
   token: string | null;
+  refreshToken: string | null;
   isLoading: boolean;
 }
