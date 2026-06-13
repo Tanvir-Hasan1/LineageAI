@@ -1,5 +1,6 @@
 import { FONTS } from '@/constants/theme';
 import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import {
@@ -13,7 +14,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ms, vs } from 'react-native-size-matters';
-import * as Haptics from 'expo-haptics';
 
 const STEPS = ['Type', 'Story', 'Tags', 'Save'];
 

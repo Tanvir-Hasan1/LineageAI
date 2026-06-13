@@ -1,23 +1,21 @@
-import React, { useState } from 'react';
-import { 
-    View, 
-    Text, 
-    StyleSheet, 
-    TouchableOpacity, 
-    ScrollView,
-    useColorScheme,
-    TextInput,
-    Modal,
-    Pressable
-} from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather, Ionicons } from '@expo/vector-icons';
-import { ms, vs } from 'react-native-size-matters';
-import { FONTS } from '@/constants/theme';
-import { MemoryCalendarModal } from '@/components/MemoryCalendarModal';
 import { PhotoCollector, VideoCollector, VoiceCollector } from '@/components/MediaCollectors';
+import { MemoryCalendarModal } from '@/components/MemoryCalendarModal';
+import { FONTS } from '@/constants/theme';
+import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useColorScheme,
+    View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ms, vs } from 'react-native-size-matters';
 
 const STEPS = ['Type', 'Story', 'Tags', 'Save'];
 
@@ -30,8 +28,8 @@ export default function StoryStepScreen() {
     // Logic: Form Inputs
     const [title, setTitle] = useState('');
     const [narrative, setNarrative] = useState('');
-    const [date, setDate] = useState(''); 
-    const [friendlyDate, setFriendlyDate] = useState(''); 
+    const [date, setDate] = useState('');
+    const [friendlyDate, setFriendlyDate] = useState('');
     const [showCalendar, setShowCalendar] = useState(false);
 
     const handleDayPress = (day: any) => {
@@ -51,7 +49,7 @@ export default function StoryStepScreen() {
         trackBg: isDarkMode ? '#2C2C2C' : '#EBECE8',
         trackActive: '#8EA281',
         btnPrimary: '#8EA281',
-        
+
         uploadBg: isDarkMode ? 'transparent' : '#BAC5B6',
         uploadBorder: '#8EA281',
         iconBack: isDarkMode ? '#2E2E33' : '#FFFFFF',
@@ -65,7 +63,7 @@ export default function StoryStepScreen() {
         <SafeAreaView style={[styles.container, { backgroundColor: palette.bg }]}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={[styles.backBtn, { backgroundColor: palette.backBg }]}
                     onPress={() => router.back()}
                 >
@@ -82,11 +80,11 @@ export default function StoryStepScreen() {
                         return (
                             <View key={step} style={styles.stepWrapper}>
                                 <View style={[
-                                    styles.stepTrack, 
+                                    styles.stepTrack,
                                     { backgroundColor: isFilled ? palette.trackActive : palette.trackBg }
                                 ]} />
                                 <Text style={[
-                                    styles.stepLabel, 
+                                    styles.stepLabel,
                                     { color: isFilled ? palette.trackActive : '#BDBDBD' }
                                 ]}>
                                     {step}
@@ -98,21 +96,21 @@ export default function StoryStepScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                
+
                 {/* Section 1: Media Collectors Matrix Switch (Conditional) */}
                 {type === 'photo' && <PhotoCollector palette={palette} isDarkMode={isDarkMode} />}
                 {type === 'video' && <VideoCollector palette={palette} isDarkMode={isDarkMode} />}
                 {type === 'voice' && <VoiceCollector palette={palette} isDarkMode={isDarkMode} />}
-                
+
                 {/* If type === 'journal', nothing renders in this top slot, perfectly advancing straight to narration! */}
 
                 {/* Section 2: Narrative Form Controls */}
                 <Text style={[
-                    styles.sectionHeader, 
-                    { 
-                        color: palette.textDark, 
-                        marginTop: type === 'journal' ? 0 : vs(24), 
-                        marginBottom: vs(12) 
+                    styles.sectionHeader,
+                    {
+                        color: palette.textDark,
+                        marginTop: type === 'journal' ? 0 : vs(24),
+                        marginBottom: vs(12)
                     }
                 ]}>
                     Tell the story behind this memory.
@@ -143,13 +141,13 @@ export default function StoryStepScreen() {
                 </View>
 
                 <Text style={[styles.label, { color: palette.textDark, marginTop: vs(16) }]}>Date</Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                     activeOpacity={0.8}
                     onPress={() => setShowCalendar(true)}
                     style={[styles.inputWrapper, { backgroundColor: palette.inputBg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
                 >
                     <Text style={[
-                        styles.input, 
+                        styles.input,
                         { color: friendlyDate ? palette.textDark : palette.placeholder, paddingTop: vs(1) }
                     ]}>
                         {friendlyDate || "e.g. August 14, 1978"}
@@ -161,7 +159,7 @@ export default function StoryStepScreen() {
 
             {/* Bottom Anchor */}
             <View style={styles.footer}>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={[styles.continueBtn, { backgroundColor: palette.btnPrimary }]}
                     activeOpacity={0.9}
                     onPress={() => {
@@ -245,7 +243,7 @@ const styles = StyleSheet.create({
         padding: ms(20),
         borderRadius: ms(20),
         borderWidth: 1.5,
-        borderStyle: 'dashed', 
+        borderStyle: 'dashed',
         alignItems: 'center',
         justifyContent: 'center',
     },
@@ -311,7 +309,7 @@ const styles = StyleSheet.create({
     input: {
         fontFamily: FONTS.sans,
         fontSize: ms(14),
-        padding: 0, 
+        padding: 0,
     },
     textArea: {
         fontFamily: FONTS.sans,

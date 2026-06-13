@@ -47,22 +47,31 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   fetchProfile: async () => {
     try {
       const { api } = require('@/services/api');
-      const response = await api.get('/auth/me');
-      if (response.success && response.data && response.data.data) {
-        const { user } = response.data.data;
-        const nameParts = (user?.name || '').trim().split(/\s+/);
-        const firstName = nameParts[0] || '';
-        const lastName = nameParts.slice(1).join(' ') || '';
-        const mappedUser = {
-          ...user,
-          firstName,
-          lastName,
-        };
-        set({ user: mappedUser });
-        await SecureStorageService.setItem('authUser', JSON.stringify(mappedUser));
+      const response = await api.get('/users/profile');
+      console.log('[AuthStore fetchProfile] API Response success:', response.success);
+      if (response.success && response.data) {
+        console.log('[AuthStore fetchProfile] Raw API data:', JSON.stringify(response.data, null, 2));
+        const userData = response.data.data?.user || response.data.user;
+        if (userData) {
+          const nameParts = (userData.name || '').trim().split(/\s+/);
+          const firstName = nameParts[0] || '';
+          const lastName = nameParts.slice(1).join(' ') || '';
+          const mappedUser = {
+            ...userData,
+            firstName,
+            lastName,
+          };
+          set({ user: mappedUser });
+          await SecureStorageService.setItem('authUser', JSON.stringify(mappedUser));
+          console.log('[AuthStore fetchProfile] Synced user to store successfully.');
+        } else {
+          console.warn('[AuthStore fetchProfile] No user data found in response.data:', response.data);
+        }
+      } else {
+        console.error('[AuthStore fetchProfile] API request unsuccessful or returned no data. Response:', response);
       }
     } catch (error) {
-      console.error('Failed to sync user profile from /auth/me:', error);
+      console.error('Failed to sync user profile from /users/profile:', error);
     }
   },
 

@@ -1,19 +1,19 @@
-import React, { useState } from 'react';
-import { 
-    View, 
-    Text, 
-    StyleSheet, 
-    TouchableOpacity, 
-    ScrollView,
-    useColorScheme,
-    TextInput
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather, Ionicons } from '@expo/vector-icons';
-import { ms, vs } from 'react-native-size-matters';
 import { FONTS } from '@/constants/theme';
+import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    useColorScheme,
+    View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ms, vs } from 'react-native-size-matters';
 
 const STEPS = ['Type', 'Story', 'Tags', 'Save'];
 
@@ -44,7 +44,7 @@ export default function TagsStepScreen() {
         if (!customTag.trim()) return;
         let formatted = customTag.trim();
         if (!formatted.startsWith('#')) formatted = `#${formatted}`;
-        
+
         if (!allTags.includes(formatted)) {
             setAllTags([...allTags, formatted]);
         }
@@ -66,12 +66,12 @@ export default function TagsStepScreen() {
         // Tag specific visuals
         inputBg: isDarkMode ? '#3E4348' : '#E4E3EC',
         placeholder: isDarkMode ? 'rgba(255,255,255,0.3)' : 'rgba(45,44,57,0.4)',
-        
+
         // Static (unselected) tag palette matching screenshot
         tagBg: isDarkMode ? '#2D2C39' : '#EBF1F5',
         tagBorder: isDarkMode ? '#3F4149' : '#D3DFE8',
         tagText: isDarkMode ? '#A0A7B5' : '#8EA2B5',
-        
+
         // Active selection overrides
         tagActiveBg: '#8EA281',
         tagActiveText: '#FFFFFF'
@@ -81,7 +81,7 @@ export default function TagsStepScreen() {
         <SafeAreaView style={[styles.container, { backgroundColor: palette.bg }]}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={[styles.backBtn, { backgroundColor: palette.backBg }]}
                     onPress={() => router.back()}
                 >
@@ -98,11 +98,11 @@ export default function TagsStepScreen() {
                         return (
                             <View key={step} style={styles.stepWrapper}>
                                 <View style={[
-                                    styles.stepTrack, 
+                                    styles.stepTrack,
                                     { backgroundColor: isFilled ? palette.trackActive : palette.trackBg }
                                 ]} />
                                 <Text style={[
-                                    styles.stepLabel, 
+                                    styles.stepLabel,
                                     { color: isFilled ? palette.trackActive : '#BDBDBD' }
                                 ]}>
                                     {step}
@@ -114,7 +114,7 @@ export default function TagsStepScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                
+
                 <Text style={[styles.sectionHeader, { color: palette.textDark, marginBottom: vs(20) }]}>
                     Tag this memory to help the AI find it more easily.
                 </Text>
@@ -124,13 +124,13 @@ export default function TagsStepScreen() {
                     {allTags.map((tag) => {
                         const isSelected = selectedTags.includes(tag);
                         return (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                                 key={tag}
                                 activeOpacity={0.7}
                                 onPress={() => toggleTag(tag)}
                                 style={[
                                     styles.tagPill,
-                                    { 
+                                    {
                                         backgroundColor: isSelected ? palette.tagActiveBg : palette.tagBg,
                                         borderColor: isSelected ? palette.tagActiveBg : palette.tagBorder
                                     }
@@ -150,7 +150,7 @@ export default function TagsStepScreen() {
                 {/* Custom Ingester Node */}
                 <View style={styles.customTagRow}>
                     <View style={[styles.inputWrapper, { backgroundColor: palette.inputBg }]}>
-                        <TextInput 
+                        <TextInput
                             placeholder="Add custom tag..."
                             placeholderTextColor={palette.placeholder}
                             style={[styles.input, { color: palette.textDark }]}
@@ -160,7 +160,7 @@ export default function TagsStepScreen() {
                         />
                     </View>
 
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={[styles.addButton, { backgroundColor: palette.btnPrimary }]}
                         activeOpacity={0.8}
                         onPress={addCustomTag}
@@ -173,7 +173,7 @@ export default function TagsStepScreen() {
 
             {/* Bottom Step Advance */}
             <View style={styles.footer}>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={[styles.continueBtn, { backgroundColor: palette.btnPrimary }]}
                     activeOpacity={0.9}
                     onPress={() => {

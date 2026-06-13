@@ -75,23 +75,23 @@ class ApiClient {
             headers.set('Authorization', `Bearer ${newToken}`);
           }
           const retryConfig = { ...config, headers };
-          
+
           if (__DEV__) {
             console.log(`[API Retry Request] ${retryConfig.method || 'GET'} -> ${url}`);
           }
-          
+
           const retryResponse = await fetch(url, retryConfig);
           if (retryResponse.status === 204) {
             return { success: true, data: null, status: 204 };
           }
-          
+
           let retryJson: any = null;
           try {
             retryJson = await retryResponse.json();
           } catch (e) {
             // Safe fallback if JSON parsing fails on retry response
           }
-          
+
           if (!retryResponse.ok) {
             const errorMsg = retryJson?.error?.message || retryJson?.message || `Request failed with status ${retryResponse.status}`;
             throw {
@@ -175,7 +175,7 @@ class ApiClient {
       }
 
       const refreshUrl = `${this.baseUrl}/auth/refresh`;
-      
+
       if (__DEV__) {
         console.log(`[API Token Refresh] POST -> ${refreshUrl}`);
       }
@@ -201,10 +201,10 @@ class ApiClient {
       const json = await response.json();
       if (json.success && json.data && json.data.tokens) {
         const { tokens, user } = json.data;
-        
+
         // Dynamically require useAuthStore to avoid circular dependencies
         const { useAuthStore } = require('@/store/auth-store');
-        
+
         const nameParts = (user?.name || '').trim().split(/\s+/);
         const firstName = nameParts[0] || '';
         const lastName = nameParts.slice(1).join(' ') || '';
@@ -238,11 +238,11 @@ class ApiClient {
 
   private handleRefreshFailure() {
     this.onTokenRefreshed('');
-    
+
     // Dynamically sign out
     const { useAuthStore } = require('@/store/auth-store');
     useAuthStore.getState().signOut();
-    
+
     // Redirect to sign in page
     const { router } = require('expo-router');
     try {

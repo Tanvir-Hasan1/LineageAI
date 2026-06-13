@@ -10,6 +10,32 @@ export interface User {
   role?: string;
   isEmailVerified?: boolean;
   avatarUrl?: string;
+  phoneNumber?: string;
+  address?: string;
+  profilePicture?: {
+    key: string;
+    url: string;
+    originalName: string;
+    mimeType: string;
+    size: number;
+  };
+  familyMembers?: {
+    userId: string;
+    name: string;
+    email: string;
+    relation: string;
+    role: string;
+    status: string;
+  }[];
+  preferences?: {
+    notifications: boolean;
+    aiInsight: boolean;
+    darkMode: boolean;
+    anonymousAnalytics: boolean;
+  };
+  legacyAccessEnabled?: boolean;
+  lastActiveAt?: string;
+  lastLoginAt?: string;
   createdAt: string;
   updatedAt?: string;
 }

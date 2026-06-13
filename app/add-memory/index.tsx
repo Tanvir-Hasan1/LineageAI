@@ -1,6 +1,6 @@
 import { FONTS } from '@/constants/theme';
-import * as Haptics from 'expo-haptics';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {

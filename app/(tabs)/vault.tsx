@@ -1,7 +1,7 @@
 import { FONTS } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
-import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
     Image,
@@ -129,7 +129,7 @@ export default function MemoryVaultScreen() {
                     <Text style={[styles.title, { color: colors.textDark }]}>Memory Vault</Text>
                     <Text style={[styles.subtitle, { color: colors.textMuted }]}>6 memories preserved</Text>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={[styles.iconBtn, { borderColor: colors.border }]}
                     onPress={() => router.push('/notifications')}
                 >
@@ -194,18 +194,18 @@ export default function MemoryVaultScreen() {
                                 {/* Enhanced Conditional Rendering for Audio/Document Layout */}
                                 {!item.image && (
                                     <View style={[
-                                        styles.iconCircle, 
-                                        { 
+                                        styles.iconCircle,
+                                        {
                                             backgroundColor: isDarkMode ? '#4A5560' : '#A6B4BD', // Derived from provided color palette
                                             borderRadius: ms(16), // As seen in sample
                                             width: ms(48), // Enlarged to properly anchor the taller row
                                             height: ms(48)
                                         }
                                     ]}>
-                                        <Feather 
-                                            name={item.type === 'Voice' ? 'mic' : 'file-text'} 
-                                            size={ms(24)} 
-                                            color="#FFF" 
+                                        <Feather
+                                            name={item.type === 'Voice' ? 'mic' : 'file-text'}
+                                            size={ms(24)}
+                                            color="#FFF"
                                         />
                                     </View>
                                 )}
@@ -214,7 +214,7 @@ export default function MemoryVaultScreen() {
                                     <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
                                         {item.author} · {item.date}
                                     </Text>
-                                    
+
                                     {/* Sub-Row specific to Voice content execution */}
                                     {item.duration && (
                                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: vs(6) }}>
@@ -226,10 +226,10 @@ export default function MemoryVaultScreen() {
                                     )}
                                 </View>
                                 <View style={[
-                                    styles.typePill, 
-                                    { 
-                                        backgroundColor: isDarkMode ? '#8EA281' : (item.type === 'Voice' || item.type === 'Journal' ? '#A2B5C1' : 'rgba(0,0,0,0.15)'), 
-                                        borderRadius: ms(12) 
+                                    styles.typePill,
+                                    {
+                                        backgroundColor: isDarkMode ? '#8EA281' : (item.type === 'Voice' || item.type === 'Journal' ? '#A2B5C1' : 'rgba(0,0,0,0.15)'),
+                                        borderRadius: ms(12)
                                     }
                                 ]}>
                                     <Text style={styles.typeText}>{item.type}</Text>
@@ -242,15 +242,15 @@ export default function MemoryVaultScreen() {
 
                             <View style={[styles.tagRow, { marginTop: vs(8) }]}>
                                 {item.tags.map(t => (
-                                    <View 
-                                        key={t} 
+                                    <View
+                                        key={t}
                                         style={[
-                                            styles.cardTag, 
-                                            { 
+                                            styles.cardTag,
+                                            {
                                                 backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : '#E2E7EA',
                                                 borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.15)' : '#B7C5CE',
                                                 borderWidth: 1,
-                                                borderRadius: ms(20) 
+                                                borderRadius: ms(20)
                                             }
                                         ]}
                                     >

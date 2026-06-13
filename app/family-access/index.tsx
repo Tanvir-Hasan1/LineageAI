@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     View, 
     Text, 
@@ -14,6 +14,7 @@ import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ms, vs } from 'react-native-size-matters';
 import { FONTS } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
+import { useAuth } from '@/hooks/use-auth';
 
 // STANDALONE SUBCOMPONENT IMPORT
 import InviteModal from '@/components/InviteModal';
@@ -25,6 +26,12 @@ const IMG_AVATAR_JAMES = require('@/assets/images/dashboard/robert.png');
 export default function FamilyAccessScreen() {
     const router = useRouter();
     const isDarkMode = useColorScheme() === 'dark';
+    const { user } = useAuth();
+
+    // Log family members to console for developer verification
+    useEffect(() => {
+        console.log('[Family Access Screen] Active user family members:', JSON.stringify(user?.familyMembers || [], null, 2));
+    }, [user?.familyMembers]);
 
     // Local Orchestrator
     const [inviteVisible, setInviteVisible] = useState(false);
@@ -69,7 +76,11 @@ export default function FamilyAccessScreen() {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 
                 <Text style={[styles.pageTitle, { color: palette.textDark }]}>Family Access</Text>
-                <Text style={[styles.pageSubText, { color: palette.textSub }]}>2 members with access</Text>
+                <Text style={[styles.pageSubText, { color: palette.textSub }]}>
+                    {user?.familyMembers && user.familyMembers.length > 0 
+                        ? `${user.familyMembers.length} member${user.familyMembers.length === 1 ? '' : 's'} with access` 
+                        : 'No family members with access'}
+                </Text>
 
                 {/* TOP ACTION POD */}
                 <TouchableOpacity 
@@ -91,37 +102,78 @@ export default function FamilyAccessScreen() {
 
                 <Text style={[styles.sectionHeader, { color: isDarkMode ? '#AFAFB9' : '#3A3C45' }]}>MEMBERS</Text>
 
-                {/* MEMBER CARD 1 */}
-                <View style={[styles.memberCard, { backgroundColor: palette.card1Bg }]}>
-                    <Image source={IMG_AVATAR_SARAH} style={styles.avatar} />
-                    <View style={styles.memberText}>
-                        <Text style={[styles.memberName, { color: isDarkMode ? '#FFFFFF' : '#2D2C39' }]}>Sarah Mitchell</Text>
-                        <Text style={[styles.memberEmail, { color: isDarkMode ? '#8F8F9E' : '#8A8A95' }]}>sarah@example.com</Text>
-                    </View>
-                    <View style={[styles.roleBadge, { backgroundColor: palette.badge1Bg }]}>
-                        <MaterialCommunityIcons name="crown-outline" size={ms(13)} color="#FFFFFF" style={{ marginRight: ms(4) }} />
-                        <Text style={styles.badgeText}>Owner</Text>
-                    </View>
-                    <TouchableOpacity style={styles.dotsBtn}>
-                        <MaterialCommunityIcons name="dots-vertical" size={ms(20)} color={isDarkMode ? '#8F8F9E' : '#2D2C39'} />
-                    </TouchableOpacity>
-                </View>
+                {user?.familyMembers && user.familyMembers.length > 0 ? (
+                    user.familyMembers.map((member, idx) => {
+                        const isOwner = member.role?.toLowerCase() === 'owner';
+                        const isPending = member.status?.toLowerCase() === 'pending';
+                        const cardBg = idx % 2 === 0 ? palette.card1Bg : palette.card2Bg;
+                        const badgeBg = idx % 2 === 0 ? palette.badge1Bg : palette.badge2Bg;
+                        
+                        // Select default avatar or URI if needed
+                        const avatarSource = idx % 2 === 0 ? IMG_AVATAR_SARAH : IMG_AVATAR_JAMES;
+                        
+                        return (
+                            <View key={member.userId || idx} style={[styles.memberCard, { backgroundColor: cardBg }]}>
+                                <Image source={avatarSource} style={styles.avatar} />
+                                <View style={styles.memberText}>
+                                    <Text style={[styles.memberName, { color: isDarkMode ? '#FFFFFF' : '#2D2C39' }]}>
+                                        {member.name} {member.relation ? `(${member.relation})` : ''}
+                                    </Text>
+                                    <Text style={[styles.memberEmail, { color: isDarkMode ? '#8F8F9E' : '#8A8A95' }]}>
+                                        {member.email}
+                                    </Text>
+                                </View>
+                                <View style={[styles.roleBadge, { backgroundColor: isPending ? '#E0923C' : badgeBg }]}>
+                                    {isOwner ? (
+                                        <MaterialCommunityIcons name="crown-outline" size={ms(13)} color="#FFFFFF" style={{ marginRight: ms(4) }} />
+                                    ) : (
+                                        <Feather name={isPending ? 'clock' : 'edit-2'} size={ms(11)} color="#FFFFFF" style={{ marginRight: ms(4) }} />
+                                    )}
+                                    <Text style={styles.badgeText}>
+                                        {isPending ? 'Pending' : (member.role.charAt(0).toUpperCase() + member.role.slice(1))}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity style={styles.dotsBtn}>
+                                    <MaterialCommunityIcons name="dots-vertical" size={ms(20)} color={isDarkMode ? '#8F8F9E' : '#2D2C39'} />
+                                </TouchableOpacity>
+                            </View>
+                        );
+                    })
+                ) : (
+                    <>
+                        {/* MEMBER CARD 1 */}
+                        <View style={[styles.memberCard, { backgroundColor: palette.card1Bg }]}>
+                            <Image source={IMG_AVATAR_SARAH} style={styles.avatar} />
+                            <View style={styles.memberText}>
+                                <Text style={[styles.memberName, { color: isDarkMode ? '#FFFFFF' : '#2D2C39' }]}>Sarah Mitchell</Text>
+                                <Text style={[styles.memberEmail, { color: isDarkMode ? '#8F8F9E' : '#8A8A95' }]}>sarah@example.com</Text>
+                            </View>
+                            <View style={[styles.roleBadge, { backgroundColor: palette.badge1Bg }]}>
+                                <MaterialCommunityIcons name="crown-outline" size={ms(13)} color="#FFFFFF" style={{ marginRight: ms(4) }} />
+                                <Text style={styles.badgeText}>Owner</Text>
+                            </View>
+                            <TouchableOpacity style={styles.dotsBtn}>
+                                <MaterialCommunityIcons name="dots-vertical" size={ms(20)} color={isDarkMode ? '#8F8F9E' : '#2D2C39'} />
+                            </TouchableOpacity>
+                        </View>
 
-                {/* MEMBER CARD 2 */}
-                <View style={[styles.memberCard, { backgroundColor: palette.card2Bg }]}>
-                    <Image source={IMG_AVATAR_JAMES} style={styles.avatar} />
-                    <View style={styles.memberText}>
-                        <Text style={[styles.memberName, { color: isDarkMode ? '#FFFFFF' : '#2D2C39' }]}>James Mitchell</Text>
-                        <Text style={[styles.memberEmail, { color: isDarkMode ? '#8F9E9E' : '#8A9595' }]}>james@example.com</Text>
-                    </View>
-                    <View style={[styles.roleBadge, { backgroundColor: palette.badge2Bg }]}>
-                        <Feather name="edit-2" size={ms(11)} color="#FFFFFF" style={{ marginRight: ms(4) }} />
-                        <Text style={styles.badgeText}>Editor</Text>
-                    </View>
-                    <TouchableOpacity style={styles.dotsBtn}>
-                        <MaterialCommunityIcons name="dots-vertical" size={ms(20)} color={isDarkMode ? '#8F8F9E' : '#2D2C39'} />
-                    </TouchableOpacity>
-                </View>
+                        {/* MEMBER CARD 2 */}
+                        <View style={[styles.memberCard, { backgroundColor: palette.card2Bg }]}>
+                            <Image source={IMG_AVATAR_JAMES} style={styles.avatar} />
+                            <View style={styles.memberText}>
+                                <Text style={[styles.memberName, { color: isDarkMode ? '#FFFFFF' : '#2D2C39' }]}>James Mitchell</Text>
+                                <Text style={[styles.memberEmail, { color: isDarkMode ? '#8F9E9E' : '#8A9595' }]}>james@example.com</Text>
+                            </View>
+                            <View style={[styles.roleBadge, { backgroundColor: palette.badge2Bg }]}>
+                                <Feather name="edit-2" size={ms(11)} color="#FFFFFF" style={{ marginRight: ms(4) }} />
+                                <Text style={styles.badgeText}>Editor</Text>
+                            </View>
+                            <TouchableOpacity style={styles.dotsBtn}>
+                                <MaterialCommunityIcons name="dots-vertical" size={ms(20)} color={isDarkMode ? '#8F8F9E' : '#2D2C39'} />
+                            </TouchableOpacity>
+                        </View>
+                    </>
+                )}
 
                 {/* BOTTOM CAPSULE */}
                 <View style={[styles.infoCapsule, { backgroundColor: palette.infoPodBg }]}>

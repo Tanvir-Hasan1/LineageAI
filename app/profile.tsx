@@ -23,18 +23,53 @@ import { useAuth } from '@/hooks/use-auth';
 
 export default function ProfileScreen() {
     const router = useRouter();
-    const { user, signOut } = useAuth();
+    const { user, signOut, fetchProfile, updateUser } = useAuth();
     const isDarkMode = useColorScheme() === 'dark';
     
-    if (__DEV__) {
+    // Log user state whenever it changes
+    useEffect(() => {
         console.log('[Profile Screen] Current user state:', JSON.stringify(user, null, 2));
-    }
+    }, [user]);
+
+    // Fetch user profile on component mount
+    useEffect(() => {
+        console.log('[Profile Screen] Fetching user profile from API...');
+        fetchProfile().catch((err) => {
+            console.error('[Profile Screen] Failed to fetch user profile:', err);
+        });
+    }, [fetchProfile]);
 
     // Local State For Interactive Preference Switches
     const [notifications, setNotifications] = useState(true);
     const [aiInsights, setAiInsights] = useState(true);
     const [darkMode, setDarkMode] = useState(isDarkMode);
     const [analytics, setAnalytics] = useState(false);
+
+    // Sync local preference states when user object updates
+    useEffect(() => {
+        if (user?.preferences) {
+            setNotifications(user.preferences.notifications);
+            setAiInsights(user.preferences.aiInsight);
+            setDarkMode(user.preferences.darkMode);
+            setAnalytics(user.preferences.anonymousAnalytics);
+        }
+    }, [user?.preferences]);
+
+    // Helper to persist preference updates to auth store
+    const updatePreference = (key: 'notifications' | 'aiInsight' | 'darkMode' | 'anonymousAnalytics', val: boolean) => {
+        if (!user) return;
+        const updatedPrefs = {
+            notifications: user.preferences?.notifications ?? true,
+            aiInsight: user.preferences?.aiInsight ?? true,
+            darkMode: user.preferences?.darkMode ?? true,
+            anonymousAnalytics: user.preferences?.anonymousAnalytics ?? false,
+            ...user.preferences,
+            [key]: val
+        };
+        updateUser({ preferences: updatedPrefs }).catch((err) => {
+            console.error('[Profile Screen] Failed to update user preferences:', err);
+        });
+    };
 
     // Modal Interaction States
     const [showSignOut, setShowSignOut] = useState(false);
@@ -157,7 +192,7 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
                     <View style={styles.avatarComposite}>
                         <Image 
-                            source={require('@/assets/images/dashboard/avatar.png')} 
+                            source={user?.profilePicture?.url ? { uri: user.profilePicture.url } : require('@/assets/images/dashboard/avatar.png')} 
                             style={styles.profileImg}
                         />
                         {/* Green Check Mark Badge */}
@@ -179,10 +214,48 @@ export default function ProfileScreen() {
                 <Text style={[styles.sectionTitle, { color: palette.sectionHeader }]}>ACCOUNT</Text>
                 <View style={[styles.groupContainer, { backgroundColor: palette.accountBg }]}>
                     <SettingsRow icon="user" label="Edit Profile" groupType="account" />
+                    {user?.phoneNumber && (
+                        <>
+                            <View style={styles.divider} />
+                            <SettingsRow 
+                                icon="phone" 
+                                label="Phone Number" 
+                                subtext={user.phoneNumber} 
+                                groupType="account" 
+                                showArrow={false} 
+                            />
+                        </>
+                    )}
+                    {user?.address && (
+                        <>
+                            <View style={styles.divider} />
+                            <SettingsRow 
+                                icon="map-pin" 
+                                label="Address" 
+                                subtext={user.address} 
+                                groupType="account" 
+                                showArrow={false} 
+                            />
+                        </>
+                    )}
                     <View style={styles.divider} />
-                    <SettingsRow icon="users" label="Family Access" groupType="account" onPress={() => { triggerHaptic(); router.push('/family-access'); }} />
+                    <SettingsRow 
+                        icon="users" 
+                        label="Family Access" 
+                        subtext={user?.familyMembers && user.familyMembers.length > 0 
+                            ? `${user.familyMembers.length} member${user.familyMembers.length === 1 ? '' : 's'} with access` 
+                            : 'Manage family member access'}
+                        groupType="account" 
+                        onPress={() => { triggerHaptic(); router.push('/family-access'); }} 
+                    />
                     <View style={styles.divider} />
-                    <SettingsRow icon="shield" label="Legacy Mode" groupType="account" onPress={() => { triggerHaptic(); router.push('/legacy-mode'); }} />
+                    <SettingsRow 
+                        icon="shield" 
+                        label="Legacy Mode" 
+                        subtext={user?.legacyAccessEnabled ? 'Enabled' : 'Disabled'}
+                        groupType="account" 
+                        onPress={() => { triggerHaptic(); router.push('/legacy-mode'); }} 
+                    />
                 </View>
 
                 {/* ----------- PRIVACY & SECURITY ---------- */}
@@ -203,7 +276,10 @@ export default function ProfileScreen() {
                         groupType="pref"
                         showSwitch={true}
                         switchVal={notifications}
-                        setSwitchVal={setNotifications}
+                        setSwitchVal={(val: boolean) => {
+                            setNotifications(val);
+                            updatePreference('notifications', val);
+                        }}
                     />
                     <View style={styles.divider} />
                     <SettingsRow 
@@ -213,7 +289,10 @@ export default function ProfileScreen() {
                         groupType="pref"
                         showSwitch={true}
                         switchVal={aiInsights}
-                        setSwitchVal={setAiInsights}
+                        setSwitchVal={(val: boolean) => {
+                            setAiInsights(val);
+                            updatePreference('aiInsight', val);
+                        }}
                     />
                     <View style={styles.divider} />
                     <SettingsRow 
@@ -222,7 +301,10 @@ export default function ProfileScreen() {
                         groupType="pref"
                         showSwitch={true}
                         switchVal={darkMode}
-                        setSwitchVal={toggleDarkMode}
+                        setSwitchVal={(val: boolean) => {
+                            toggleDarkMode(val);
+                            updatePreference('darkMode', val);
+                        }}
                     />
                     <View style={styles.divider} />
                     <SettingsRow 
@@ -232,7 +314,10 @@ export default function ProfileScreen() {
                         groupType="pref"
                         showSwitch={true}
                         switchVal={analytics}
-                        setSwitchVal={setAnalytics}
+                        setSwitchVal={(val: boolean) => {
+                            setAnalytics(val);
+                            updatePreference('anonymousAnalytics', val);
+                        }}
                     />
                 </View>
 
