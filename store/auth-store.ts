@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import { User, AuthState } from '@/types/auth';
+import { AuthState, User } from '@/types/auth';
 import { SecureStorageService } from '@/utils/storage';
+import { create } from 'zustand';
 
 export interface AuthStore extends AuthState {
   signIn: (token: string, refreshToken: string | null, userData: User) => Promise<void>;
@@ -8,6 +8,9 @@ export interface AuthStore extends AuthState {
   updateUser: (userData: Partial<User>) => Promise<void>;
   initialize: () => Promise<void>;
   fetchProfile: () => Promise<void>;
+  updateProfile: (formData: FormData) => Promise<{ success: boolean; message?: string }>;
+  isProfilePictureLoading: boolean;
+  setProfilePictureLoading: (isLoading: boolean) => void;
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
@@ -16,6 +19,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   token: null,
   refreshToken: null,
   isLoading: true,
+  isProfilePictureLoading: false,
+
+  setProfilePictureLoading: (isLoading: boolean) => set({ isProfilePictureLoading: isLoading }),
 
   initialize: async () => {
     try {
@@ -127,6 +133,36 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       await SecureStorageService.setItem('authUser', JSON.stringify(updatedUser));
     } catch (error) {
       console.error('Failed to persist updated user info:', error);
+    }
+  },
+
+  updateProfile: async (formData: FormData) => {
+    try {
+      const { api } = require('@/services/api');
+      const response = await api.patch('/users/profile', formData);
+      console.log('[AuthStore updateProfile] Response success:', response.success);
+      if (response.success && response.data) {
+        console.log('[AuthStore updateProfile] Response data:', JSON.stringify(response.data, null, 2));
+        const userData = response.data.data?.user || response.data.user;
+        if (userData) {
+          const nameParts = (userData.name || '').trim().split(/\s+/);
+          const firstName = nameParts[0] || '';
+          const lastName = nameParts.slice(1).join(' ') || '';
+          const mappedUser = {
+            ...userData,
+            firstName,
+            lastName,
+          };
+          set({ user: mappedUser });
+          await SecureStorageService.setItem('authUser', JSON.stringify(mappedUser));
+          console.log('[AuthStore updateProfile] Synced updated user to store.');
+          return { success: true };
+        }
+      }
+      return { success: false, message: response.message || 'Failed to update profile' };
+    } catch (error: any) {
+      console.error('[AuthStore updateProfile] Error:', error);
+      return { success: false, message: error?.message || 'An error occurred during update' };
     }
   },
 }));

@@ -1,17 +1,17 @@
-import React from 'react';
-import { 
-    View, 
-    Text, 
-    StyleSheet, 
-    TouchableOpacity, 
-    useColorScheme 
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
-import { ms, vs } from 'react-native-size-matters';
 import { FONTS } from '@/constants/theme';
+import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import {
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    useColorScheme,
+    View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ms, vs } from 'react-native-size-matters';
 
 export default function LegacySuccessScreen() {
     const router = useRouter();
@@ -19,13 +19,13 @@ export default function LegacySuccessScreen() {
 
     const palette = {
         bg: isDarkMode ? '#121212' : '#F9F8F6',
-        
+
         iconBg: isDarkMode ? '#31373D' : '#E5E4EB',
         iconColor: isDarkMode ? '#8CA0A0' : '#8A93A5',
-        
+
         title: isDarkMode ? '#C3C9A5' : '#2D2C39',
         sub: isDarkMode ? '#858585' : '#8F9D8A',
-        
+
         btnBg: '#92A38D',
         btnText: '#FFFFFF'
     };
@@ -33,13 +33,13 @@ export default function LegacySuccessScreen() {
     const handleFinish = () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         // Replace our location back to profile so the user cannot back-navigate into activation process again.
-        router.replace('/profile');
+        router.replace('/profile' as any);
     };
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: palette.bg }]}>
             <View style={styles.content}>
-                
+
                 {/* Dynamic Central Success Node */}
                 <View style={[styles.iconCirc, { backgroundColor: palette.iconBg }]}>
                     <Feather name="shield" size={ms(42)} color={palette.iconColor} />
@@ -53,7 +53,7 @@ export default function LegacySuccessScreen() {
                     Your archive is now protected. After 1 year of inactivity, your trusted contacts will be notified according to your rules.
                 </Text>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={[styles.btn, { backgroundColor: palette.btnBg }]}
                     activeOpacity={0.8}
                     onPress={handleFinish}

@@ -34,10 +34,13 @@ class ApiClient {
 
     // 1. Set default headers
     const headers = new Headers({
-      'Content-Type': 'application/json',
       Accept: 'application/json',
       ...customHeaders,
     });
+
+    if (!(fetchOptions.body instanceof FormData)) {
+      headers.set('Content-Type', 'application/json');
+    }
 
     // 2. Inject Authorization header if required
     if (requireAuth) {
@@ -266,7 +269,7 @@ class ApiClient {
     return this.request<T>(path, {
       ...options,
       method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
     });
   }
 
@@ -277,7 +280,18 @@ class ApiClient {
     return this.request<T>(path, {
       ...options,
       method: 'PUT',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
+    });
+  }
+
+  /**
+   * PATCH Request
+   */
+  async patch<T = any>(path: string, body?: any, options?: Omit<ApiRequestOptions, 'method' | 'body'>): Promise<ApiResponse<T>> {
+    return this.request<T>(path, {
+      ...options,
+      method: 'PATCH',
+      body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
     });
   }
 

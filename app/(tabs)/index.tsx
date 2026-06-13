@@ -1,11 +1,13 @@
-import { LightTheme, FONTS } from '@/constants/theme';
+import { FONTS, LightTheme } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useMemo } from 'react';
+import { useRouter } from 'expo-router';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useAuth } from '@/hooks/use-auth';
+import { getAvatarSource } from '@/utils/image';
 import {
     ScrollView,
     StatusBar,
@@ -13,6 +15,7 @@ import {
     TouchableOpacity,
     View,
     useColorScheme,
+    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScaledSheet } from 'react-native-size-matters';
@@ -22,6 +25,14 @@ export default function DashboardScreen() {
     const colorScheme = useColorScheme();
     const styles = useMemo(() => getStyles(colors), [colors]);
     const router = useRouter();
+    const { user, isProfilePictureLoading, setProfilePictureLoading } = useAuth();
+    const [imageError, setImageError] = useState(false);
+
+    useEffect(() => {
+        setImageError(false);
+    }, [user?.profilePicture?.url]);
+
+    const hasImage = !!(user?.profilePicture?.url || user?.avatarUrl) && !imageError;
 
     const familyMembers = [
         {
@@ -79,29 +90,46 @@ export default function DashboardScreen() {
                 <View style={styles.header}>
                     <View>
                         <Text style={styles.greeting}>Good afternoon,</Text>
-                        <Text style={styles.userName}>Sarah.</Text>
+                        <Text style={styles.userName}>{user?.firstName || user?.name || 'Sarah'}.</Text>
                         <Text style={styles.metrics}>2 profiles · 6 memories preserved</Text>
                     </View>
                     <View style={styles.headerRight}>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.notificationBtn}
                             onPress={() => router.push('/notifications')}
                         >
                             <MaterialCommunityIcons name="bell-outline" size={26} color={colors.primaryAlt} />
                             <View style={styles.notificationDot} />
                         </TouchableOpacity>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.avatarWrapper}
                             activeOpacity={0.8}
                             onPress={() => {
                                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                                router.push('/profile');
+                                router.push('/profile' as any);
                             }}
                         >
-                            <Image
-                                source={require('@/assets/images/dashboard/avatar.png')}
-                                style={styles.avatar}
-                            />
+                            {hasImage ? (
+                                <Image
+                                    source={getAvatarSource(user)}
+                                    style={styles.avatar}
+                                    onLoadStart={() => setProfilePictureLoading(true)}
+                                    onLoadEnd={() => setProfilePictureLoading(false)}
+                                    onError={() => {
+                                        setProfilePictureLoading(false);
+                                        setImageError(true);
+                                    }}
+                                />
+                            ) : (
+                                <View style={[styles.avatarPlaceholder, { backgroundColor: colorScheme === 'dark' ? '#1F1E24' : '#EAE6EC' }]}>
+                                    <Feather name="user" size={20} color={colorScheme === 'dark' ? '#A0A0A0' : '#78849B'} />
+                                </View>
+                            )}
+                            {isProfilePictureLoading && (
+                                <View style={styles.imageLoadingContainer}>
+                                    <ActivityIndicator size="small" color="#8EA181" />
+                                </View>
+                            )}
                             <View style={styles.onlineBadge} />
                         </TouchableOpacity>
                     </View>
@@ -288,6 +316,24 @@ const getStyles = (colors: typeof LightTheme) => ScaledSheet.create({
     avatar: {
         width: '42@ms',
         height: '42@ms',
+        borderRadius: '21@ms',
+    },
+    avatarPlaceholder: {
+        width: '42@ms',
+        height: '42@ms',
+        borderRadius: '21@ms',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    imageLoadingContainer: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.15)',
         borderRadius: '21@ms',
     },
     onlineBadge: {

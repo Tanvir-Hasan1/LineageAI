@@ -8,6 +8,7 @@ import {
     useColorScheme,
     Image,
     Switch,
+    ActivityIndicator,
     Platform,
     Appearance
 } from 'react-native';
@@ -20,10 +21,11 @@ import * as Haptics from 'expo-haptics';
 import { SignOutModal } from '@/components/SignOutModal';
 import { DeleteAccountModal } from '@/components/DeleteAccountModal';
 import { useAuth } from '@/hooks/use-auth';
+import { getAvatarSource } from '@/utils/image';
 
 export default function ProfileScreen() {
     const router = useRouter();
-    const { user, signOut, fetchProfile, updateUser } = useAuth();
+    const { user, signOut, fetchProfile, updateUser, isProfilePictureLoading, setProfilePictureLoading } = useAuth();
     const isDarkMode = useColorScheme() === 'dark';
     
     // Log user state whenever it changes
@@ -44,6 +46,13 @@ export default function ProfileScreen() {
     const [aiInsights, setAiInsights] = useState(true);
     const [darkMode, setDarkMode] = useState(isDarkMode);
     const [analytics, setAnalytics] = useState(false);
+    const [imageError, setImageError] = useState(false);
+
+    useEffect(() => {
+        setImageError(false);
+    }, [user?.profilePicture?.url]);
+
+    const hasImage = !!(user?.profilePicture?.url || user?.avatarUrl) && !imageError;
 
     // Sync local preference states when user object updates
     useEffect(() => {
@@ -191,10 +200,27 @@ export default function ProfileScreen() {
                         <Feather name="arrow-left" size={ms(24)} color={palette.textDark} />
                     </TouchableOpacity>
                     <View style={styles.avatarComposite}>
-                        <Image 
-                            source={user?.profilePicture?.url ? { uri: user.profilePicture.url } : require('@/assets/images/dashboard/avatar.png')} 
-                            style={styles.profileImg}
-                        />
+                        {hasImage ? (
+                            <Image 
+                                source={getAvatarSource(user)} 
+                                style={styles.profileImg}
+                                onLoadStart={() => setProfilePictureLoading(true)}
+                                onLoadEnd={() => setProfilePictureLoading(false)}
+                                onError={() => {
+                                    setProfilePictureLoading(false);
+                                    setImageError(true);
+                                }}
+                            />
+                        ) : (
+                            <View style={[styles.profileImgPlaceholder, { backgroundColor: isDarkMode ? '#1F1E24' : '#EAE6EC' }]}>
+                                <Feather name="user" size={ms(28)} color={isDarkMode ? '#A0A0A0' : '#78849B'} />
+                            </View>
+                        )}
+                        {isProfilePictureLoading && (
+                            <View style={styles.imageLoadingContainer}>
+                                <ActivityIndicator size="small" color="#8EA281" />
+                            </View>
+                        )}
                         {/* Green Check Mark Badge */}
                         <View style={styles.checkBadge}>
                             <Feather name="check" size={ms(12)} color="#FFFFFF" />
@@ -213,7 +239,12 @@ export default function ProfileScreen() {
                 {/* ---------------- ACCOUNT ---------------- */}
                 <Text style={[styles.sectionTitle, { color: palette.sectionHeader }]}>ACCOUNT</Text>
                 <View style={[styles.groupContainer, { backgroundColor: palette.accountBg }]}>
-                    <SettingsRow icon="user" label="Edit Profile" groupType="account" />
+                    <SettingsRow 
+                        icon="user" 
+                        label="Edit Profile" 
+                        groupType="account" 
+                        onPress={() => { triggerHaptic(); router.push('/profile/edit' as any); }} 
+                    />
                     {user?.phoneNumber && (
                         <>
                             <View style={styles.divider} />
@@ -407,6 +438,20 @@ const styles = StyleSheet.create({
     profileImg: {
         width: ms(64),
         height: ms(64),
+        borderRadius: ms(18),
+    },
+    profileImgPlaceholder: {
+        width: ms(64),
+        height: ms(64),
+        borderRadius: ms(18),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    imageLoadingContainer: {
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.15)',
         borderRadius: ms(18),
     },
     checkBadge: {
