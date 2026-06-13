@@ -38,7 +38,14 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you share memories.",
+          "cameraPermission": "The app accesses your camera to let you capture memories."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

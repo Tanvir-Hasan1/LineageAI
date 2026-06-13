@@ -2,8 +2,10 @@ import { FONTS } from '@/constants/theme';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
+    ActivityIndicator,
+    Alert,
     Image,
     ScrollView,
     StyleSheet,
@@ -14,12 +16,17 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ms, vs } from 'react-native-size-matters';
+import { useAuth } from '@/hooks/use-auth';
+import { useMemoryStore } from '@/store/memory-store';
+import { getAvatarSource } from '@/utils/image';
 
 const STEPS = ['Type', 'Story', 'Tags', 'Save'];
 
 export default function SaveReviewScreen() {
     const router = useRouter();
     const isDarkMode = useColorScheme() === 'dark';
+    const { user } = useAuth();
+    const { draft, createMemory, isCreating } = useMemoryStore();
 
     // Chromatic Sync Engine
     const palette = {
@@ -40,6 +47,42 @@ export default function SaveReviewScreen() {
         bannerBg: isDarkMode ? '#212122' : '#E4E3EC',
         bannerText: isDarkMode ? '#B0B0B0' : '#5D5C6A'
     };
+
+    const typeConfig = useMemo(() => {
+        switch (draft.type) {
+            case 'photo':
+                return { label: 'PHOTO', icon: 'image' as const };
+            case 'video':
+                return { label: 'VIDEO', icon: 'video' as const };
+            case 'voice':
+                return { label: 'VOICE', icon: 'mic' as const };
+            case 'journal':
+                return { label: 'JOURNAL', icon: 'file-text' as const };
+            default:
+                return { label: 'JOURNAL', icon: 'file-text' as const };
+        }
+    }, [draft.type]);
+
+    const formattedDate = useMemo(() => {
+        if (!draft.date) return '';
+        try {
+            const d = new Date(draft.date);
+            const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+        } catch (e) {
+            return draft.date;
+        }
+    }, [draft.date]);
+
+    const personaAvatar = useMemo(() => {
+        if (draft.whoseMemoryIsThis.includes('Margaret')) {
+            return require('@/assets/images/dashboard/margaret.png');
+        }
+        if (draft.whoseMemoryIsThis.includes('Robert')) {
+            return require('@/assets/images/dashboard/robert.png');
+        }
+        return getAvatarSource(user);
+    }, [draft.whoseMemoryIsThis, user]);
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: palette.bg }]}>
@@ -83,35 +126,41 @@ export default function SaveReviewScreen() {
                 {/* The Cinematic Preview Composite Card */}
                 <View style={[styles.reviewCard, { backgroundColor: palette.cardBg }]}>
 
+                    {draft.type === 'photo' && draft.fileUri ? (
+                        <Image source={{ uri: draft.fileUri }} style={styles.cardHero} />
+                    ) : null}
+
                     {/* Sub-Header: Type Ident */}
                     <View style={styles.cardTypeRow}>
                         <View style={[styles.iconSquircle, { backgroundColor: palette.cardIconBg }]}>
-                            <Feather name="image" size={ms(20)} color={isDarkMode ? '#8EA281' : '#A8B4A6'} />
+                            <Feather name={typeConfig.icon} size={ms(20)} color={isDarkMode ? '#8EA281' : '#A8B4A6'} />
                         </View>
-                        <Text style={styles.typeLabel}>PHOTO</Text>
+                        <Text style={styles.typeLabel}>{typeConfig.label}</Text>
                     </View>
 
                     {/* Content Stack: Title -> Narrative -> Date */}
                     <Text style={[styles.memTitle, { color: isDarkMode ? '#FFFFFF' : '#2D2C39' }]}>
-                        Title
+                        {draft.title || 'Untitled Memory'}
                     </Text>
 
                     <Text style={[styles.memNarrative, { color: isDarkMode ? '#A0A0A0' : '#78849B' }]}>
-                        Narrative
+                        {draft.narrative || 'No narrative provided.'}
                     </Text>
 
                     <Text style={[styles.memDate, { color: isDarkMode ? '#A0A0A0' : '#78849B' }]}>
-                        Date
+                        {formattedDate}
                     </Text>
 
                     {/* Local Tag Array Display */}
-                    <View style={styles.tagsRow}>
-                        {['#Family', '#Summer', '#Childhood'].map(tag => (
-                            <View key={tag} style={[styles.miniTag, { backgroundColor: palette.cardTagBg }]}>
-                                <Text style={[styles.miniTagText, { color: palette.cardTagText }]}>{tag}</Text>
-                            </View>
-                        ))}
-                    </View>
+                    {draft.tags && draft.tags.length > 0 && (
+                        <View style={styles.tagsRow}>
+                            {draft.tags.map(tag => (
+                                <View key={tag} style={[styles.miniTag, { backgroundColor: palette.cardTagBg }]}>
+                                    <Text style={[styles.miniTagText, { color: palette.cardTagText }]}>{tag}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
 
                     {/* Subtle Geometric Separation */}
                     <View style={[styles.cardDivider, { backgroundColor: palette.divider }]} />
@@ -119,10 +168,10 @@ export default function SaveReviewScreen() {
                     {/* Footer Row: Locked Persona Data */}
                     <View style={styles.personaRow}>
                         <Image
-                            source={require('@/assets/images/dashboard/margaret.png')}
+                            source={personaAvatar}
                             style={styles.avatar}
                         />
-                        <Text style={styles.personaName}>Margaret Mitchell</Text>
+                        <Text style={styles.personaName}>{draft.whoseMemoryIsThis}</Text>
                     </View>
 
                 </View>
@@ -142,13 +191,33 @@ export default function SaveReviewScreen() {
                 <TouchableOpacity
                     style={[styles.saveBtn, { backgroundColor: palette.btnPrimary }]}
                     activeOpacity={0.9}
-                    onPress={() => {
-                        // Fire definitive Success or Medium feedback to confirm saving physically!
+                    disabled={isCreating}
+                    onPress={async () => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        router.push('/(tabs)/vault');
-                    }} // Take user home/vault upon physical save!
+                        const result = await createMemory();
+                        if (result.success) {
+                            Alert.alert(
+                                'Success',
+                                'Your memory has been preserved in the vault.',
+                                [
+                                    {
+                                        text: 'OK',
+                                        onPress: () => {
+                                            router.replace('/(tabs)/vault');
+                                        }
+                                    }
+                                ]
+                            );
+                        } else {
+                            Alert.alert('Error', result.message || 'Failed to save memory.');
+                        }
+                    }}
                 >
-                    <Text style={styles.saveBtnText}>Save to Vault</Text>
+                    {isCreating ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                        <Text style={styles.saveBtnText}>Save to Vault</Text>
+                    )}
                 </TouchableOpacity>
             </View>
 
@@ -324,5 +393,12 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontSize: ms(16),
         fontWeight: '600',
+    },
+    cardHero: {
+        width: '100%',
+        height: vs(160),
+        borderRadius: ms(16),
+        marginBottom: vs(12),
+        resizeMode: 'cover',
     }
 });

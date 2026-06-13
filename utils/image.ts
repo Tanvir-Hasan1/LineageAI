@@ -25,3 +25,21 @@ export const getAvatarSource = (user: User | null | undefined) => {
   const relativePath = url.startsWith('/') ? url : `/${url}`;
   return { uri: `${baseUrl}${relativePath}` };
 };
+
+/**
+ * Resolves a relative or absolute media URL from the backend to an absolute URL string.
+ */
+export const resolveMediaUrl = (url: string | null | undefined): string | undefined => {
+  if (!url) return undefined;
+  if (
+    url.startsWith('http') ||
+    url.startsWith('file') ||
+    url.startsWith('content') ||
+    url.startsWith('data:')
+  ) {
+    return url;
+  }
+  const baseUrl = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
+  const relativePath = url.startsWith('/') ? url : `/${url}`;
+  return `${baseUrl}${relativePath}`;
+};

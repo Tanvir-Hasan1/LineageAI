@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
+    Alert,
     ScrollView,
     StyleSheet,
     Text,
@@ -16,6 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ms, vs } from 'react-native-size-matters';
+import { useMemoryStore } from '@/store/memory-store';
 
 const STEPS = ['Type', 'Story', 'Tags', 'Save'];
 
@@ -25,12 +27,15 @@ export default function StoryStepScreen() {
     const { type } = useLocalSearchParams<{ type: string }>();
     const isDarkMode = useColorScheme() === 'dark';
 
+    const { setDraft } = useMemoryStore();
+
     // Logic: Form Inputs
     const [title, setTitle] = useState('');
     const [narrative, setNarrative] = useState('');
     const [date, setDate] = useState('');
     const [friendlyDate, setFriendlyDate] = useState('');
     const [showCalendar, setShowCalendar] = useState(false);
+    const [fileUri, setFileUri] = useState<string | null>(null);
 
     const handleDayPress = (day: any) => {
         const dateStr = day.dateString;
@@ -98,9 +103,9 @@ export default function StoryStepScreen() {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
                 {/* Section 1: Media Collectors Matrix Switch (Conditional) */}
-                {type === 'photo' && <PhotoCollector palette={palette} isDarkMode={isDarkMode} />}
-                {type === 'video' && <VideoCollector palette={palette} isDarkMode={isDarkMode} />}
-                {type === 'voice' && <VoiceCollector palette={palette} isDarkMode={isDarkMode} />}
+                {type === 'photo' && <PhotoCollector palette={palette} isDarkMode={isDarkMode} fileUri={fileUri} onSelectFile={setFileUri} />}
+                {type === 'video' && <VideoCollector palette={palette} isDarkMode={isDarkMode} fileUri={fileUri} onSelectFile={setFileUri} />}
+                {type === 'voice' && <VoiceCollector palette={palette} isDarkMode={isDarkMode} fileUri={fileUri} onSelectFile={setFileUri} />}
 
                 {/* If type === 'journal', nothing renders in this top slot, perfectly advancing straight to narration! */}
 
@@ -164,6 +169,29 @@ export default function StoryStepScreen() {
                     activeOpacity={0.9}
                     onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        if (!title.trim()) {
+                            Alert.alert('Missing Title', 'Please enter a name for this memory.');
+                            return;
+                        }
+                        if (!narrative.trim()) {
+                            Alert.alert('Missing Narrative', 'Please tell the story behind this memory.');
+                            return;
+                        }
+                        if (!date) {
+                            Alert.alert('Missing Date', 'Please select a date.');
+                            return;
+                        }
+                        if (type !== 'journal' && !fileUri) {
+                            Alert.alert('File Required', `Please upload a ${type} file to continue.`);
+                            return;
+                        }
+                        
+                        setDraft({
+                            title: title.trim(),
+                            narrative: narrative.trim(),
+                            date: new Date(date).toISOString(),
+                            fileUri
+                        });
                         router.push('/add-memory/tags');
                     }}
                 >

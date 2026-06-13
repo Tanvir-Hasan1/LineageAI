@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ms, vs } from 'react-native-size-matters';
+import { useMemoryStore } from '@/store/memory-store';
 
 const STEPS = ['Type', 'Story', 'Tags', 'Save'];
 
@@ -26,6 +27,7 @@ const INITIAL_TAGS = [
 export default function TagsStepScreen() {
     const router = useRouter();
     const isDarkMode = useColorScheme() === 'dark';
+    const { setDraft } = useMemoryStore();
 
     // State Matrix for Tags and Custom Inputs
     const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -178,6 +180,9 @@ export default function TagsStepScreen() {
                     activeOpacity={0.9}
                     onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        setDraft({
+                            tags: selectedTags
+                        });
                         router.push('/add-memory/save');
                     }}
                 >

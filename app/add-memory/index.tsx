@@ -2,7 +2,7 @@ import { FONTS } from '@/constants/theme';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Image,
     ScrollView,
@@ -14,6 +14,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ms, vs } from 'react-native-size-matters';
+import { useAuth } from '@/hooks/use-auth';
+import { useMemoryStore } from '@/store/memory-store';
+import { getAvatarSource } from '@/utils/image';
 
 // Assets local pointers mapping
 const AVATARS = {
@@ -29,21 +32,56 @@ const MEMORY_TYPES = [
     { id: 'voice', label: 'Voice', desc: 'Record a voice note', icon: 'mic', lib: 'Feather', bg: '#A2B6C2', activeBg: '#7D9CAE' }
 ];
 
-const PERSONAS = [
-    { id: 'margaret', name: 'Margaret', img: AVATARS.margaret },
-    { id: 'robert', name: 'Robert', img: AVATARS.robert },
-    { id: 'mine', name: 'Mine', img: AVATARS.mine }
-];
-
 const STEPS = ['Type', 'Story', 'Tags', 'Save'];
 
 export default function AddMemoryScreen() {
     const router = useRouter();
     const isDarkMode = useColorScheme() === 'dark';
+    const { user } = useAuth();
+    const { resetDraft, setDraft } = useMemoryStore();
+
+    const personas = useMemo(() => {
+        const list = [];
+        
+        // 1. Add Self
+        list.push({
+            id: 'mine',
+            name: 'Mine',
+            displayName: user?.name || user?.firstName || 'Sarah Mitchell',
+            img: AVATARS.mine,
+            isSelf: true
+        });
+
+        // 2. Add family members
+        if (user?.familyMembers && user.familyMembers.length > 0) {
+            user.familyMembers.forEach((member) => {
+                let img = AVATARS.margaret;
+                if (member.name.toLowerCase().includes('margaret')) {
+                    img = AVATARS.margaret;
+                } else if (member.name.toLowerCase().includes('robert')) {
+                    img = AVATARS.robert;
+                }
+                
+                list.push({
+                    id: member.userId || member.email,
+                    name: member.name,
+                    displayName: member.name,
+                    img: img,
+                    isSelf: false
+                });
+            });
+        }
+
+        return list;
+    }, [user]);
 
     // State Logic
-    const [selectedType, setSelectedType] = useState('photo');
-    const [selectedPersona, setSelectedPersona] = useState('margaret');
+    const [selectedType, setSelectedType] = useState<'photo' | 'video' | 'voice' | 'journal'>('photo');
+    const [selectedPersona, setSelectedPersona] = useState('mine');
+
+    useEffect(() => {
+        resetDraft();
+    }, [resetDraft]);
 
     // Semantic theme hooks derived from screenshots
     const palette = {
@@ -106,7 +144,7 @@ export default function AddMemoryScreen() {
                             <TouchableOpacity
                                 key={type.id}
                                 activeOpacity={0.8}
-                                onPress={() => setSelectedType(type.id)}
+                                onPress={() => setSelectedType(type.id as any)}
                                 style={[
                                     styles.typeCard,
                                     { backgroundColor: type.bg },
@@ -139,8 +177,9 @@ export default function AddMemoryScreen() {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.personaContainer}
                 >
-                    {PERSONAS.map(pers => {
+                    {personas.map(pers => {
                         const isPersSelected = selectedPersona === pers.id;
+                        const source = pers.isSelf && user?.profilePicture?.url ? getAvatarSource(user) : pers.img;
                         return (
                             <TouchableOpacity
                                 key={pers.id}
@@ -151,7 +190,7 @@ export default function AddMemoryScreen() {
                                     { backgroundColor: isPersSelected ? '#8EA281' : palette.personaBg }
                                 ]}
                             >
-                                <Image source={pers.img} style={styles.personaImg} />
+                                <Image source={source} style={styles.personaImg} />
                                 <Text style={[
                                     styles.personaName,
                                     { color: isPersSelected ? '#FFFFFF' : (isDarkMode ? '#FFFFFF' : '#2D2C39') }
@@ -172,6 +211,12 @@ export default function AddMemoryScreen() {
                     activeOpacity={0.9}
                     onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        const found = personas.find(p => p.id === selectedPersona);
+                        const whose = found ? found.displayName : 'Margaret Mitchell';
+                        setDraft({
+                            type: selectedType,
+                            whoseMemoryIsThis: whose
+                        });
                         router.push({
                             pathname: '/add-memory/story',
                             params: { type: selectedType }

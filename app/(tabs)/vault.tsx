@@ -1,10 +1,14 @@
 import { FONTS } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
+import { api } from '@/services/api';
+import { resolveMediaUrl } from '@/utils/image';
 import { Feather } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
+    ActivityIndicator,
     Image,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
@@ -16,100 +20,73 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ms, vs } from 'react-native-size-matters';
 
-const IMAGES = {
-    lake: require('@/assets/images/dashboard/lake.png'),
-    wedding: require('@/assets/images/dashboard/wedding.png'),
-    coast: require('@/assets/images/dashboard/coast.png'),
-    birthday: require('@/assets/images/dashboard/birthday.png'),
-};
-
-type VaultItem = {
+export interface ApiMemory {
     id: string;
+    type: 'photo' | 'video' | 'voice' | 'journal';
+    whoseMemoryIsThis: string;
+    files: {
+        key: string;
+        url: string;
+        originalName: string;
+        mimeType: string;
+        size: number;
+    }[];
     title: string;
-    author: string;
+    narrative: string;
     date: string;
-    description: string;
-    type: 'Photo' | 'Video' | 'Journal' | 'Voice';
-    image?: any;
     tags: string[];
-    bgColor?: string;
-    darkBgColor?: string;
-    duration?: string; // Newly unlocked field for Voice playback
+    createdAt: string;
+    updatedAt: string;
+}
+
+const getCardBg = (type: string, isDarkMode: boolean) => {
+    switch (type) {
+        case 'photo':
+            return isDarkMode ? '#1C1C19' : '#E6E7DF';
+        case 'video':
+            return isDarkMode ? '#3E3D47' : '#E5E2EE';
+        case 'voice':
+            return isDarkMode ? '#242729' : '#E4E8EB';
+        case 'journal':
+            return isDarkMode ? '#222220' : '#EAE8E4';
+        default:
+            return isDarkMode ? '#222220' : '#EAE8E4';
+    }
 };
 
-const VAULT_DATA: VaultItem[] = [
-    {
-        id: '1',
-        title: 'Summer at Lake Geneva',
-        author: 'Margaret Mitchell',
-        date: 'August 14, 1978',
-        description: 'The whole family gathered at the lake house. Mom made her famous lemonade and Dad fell asleep in the hammock before noon...',
-        type: 'Photo',
-        image: IMAGES.lake,
-        tags: ['#Family', '#Summer', '#Lake'],
-        bgColor: '#E6E7DF',
-        darkBgColor: '#1C1C19',
-    },
-    {
-        id: '2',
-        title: "Margaret's Wedding Day",
-        author: 'Margaret Mitchell',
-        date: 'June 4, 1967',
-        description: 'She wore grandmother\'s pearls and carried wildflowers from the garden. Everyone said the ceremony felt like a dream.',
-        type: 'Photo',
-        image: IMAGES.wedding,
-        tags: ['#Wedding', '#Love', '#Family'],
-        bgColor: '#E6E7DF',
-        darkBgColor: '#1C1C19',
-    },
-    {
-        id: '3',
-        title: "Mom Singing in the Kitchen",
-        author: 'Margaret Mitchell',
-        date: 'December 24, 1994',
-        description: 'A recording from Christmas 1994. She always sang while cooking. We didn\'t know we were capturing something we\'d treasure...',
-        type: 'Voice',
-        duration: '2:34',
-        tags: ['#Voice', '#Christmas', '#Home'],
-        bgColor: '#E4E8EB', // Derived from User Reference
-        darkBgColor: '#242729',
-    },
-    {
-        id: '4',
-        title: 'Morning at the Oregon Coast',
-        author: 'Robert Mitchell',
-        date: 'July 2, 1983',
-        description: 'Dad always said the ocean helped him think. He brought us here every summer. The drive took five hours but felt like fiv...',
-        type: 'Video',
-        image: IMAGES.coast,
-        tags: ['#Oregon', '#Ocean', '#Summer'],
-        bgColor: '#E5E2EE',
-        darkBgColor: '#3E3D47',
-    },
-    {
-        id: '5',
-        title: "Sarah's 7th Birthday",
-        author: 'Margaret Mitchell',
-        date: 'April 5, 1991',
-        description: 'Mom baked three layers of chocolate cake and somehow lit all the candles before the wind blew them out. The whole neighb...',
-        type: 'Video',
-        image: IMAGES.birthday,
-        tags: ['#Birthday', '#Family', '#Childhood'],
-        bgColor: '#E5E2EE',
-        darkBgColor: '#3E3D47',
-    },
-    {
-        id: '6',
-        title: "Dad's Recipe for Life",
-        author: 'Robert Mitchell',
-        date: 'December 12, 2001',
-        description: '"Work hard, rest often, love always. And never, ever rush a good meal." — Written in Robert\'s journal...',
-        type: 'Journal',
-        tags: ['#Journal', '#Wisdom', '#Legacy'],
-        bgColor: '#EAE8E4',
-        darkBgColor: '#222220',
+const getPillBg = (type: string, isDarkMode: boolean) => {
+    if (isDarkMode) return '#8EA281';
+    return (type === 'voice' || type === 'journal' ? '#A2B5C1' : 'rgba(0,0,0,0.15)');
+};
+
+const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return dateString;
+        return date.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    } catch (e) {
+        return dateString;
     }
-];
+};
+
+const formatTag = (tag: string) => {
+    const clean = tag.trim();
+    if (!clean) return '';
+    const formatted = clean.startsWith('#') ? clean : `#${clean}`;
+    return formatted.charAt(0) + formatted.charAt(1).toUpperCase() + formatted.slice(2);
+};
+
+const displayTypeMap: Record<string, string> = {
+    'photo': 'Photo',
+    'video': 'Video',
+    'voice': 'Voice',
+    'journal': 'Journal'
+};
 
 export default function MemoryVaultScreen() {
     const colors = useAppTheme();
@@ -118,8 +95,207 @@ export default function MemoryVaultScreen() {
     const [searchQuery, setSearchQuery] = useState('');
     const [activeCategory, setActiveCategory] = useState('All');
 
+    // API State
+    const [memories, setMemories] = useState<ApiMemory[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
     const categories = ['All', 'Photos', 'Videos', 'Notes', 'Voice'];
     const quickTags = ['#Family', '#Summer', '#Lake', '#Wedding', '#Love'];
+
+    const fetchMemories = useCallback(async (showIndicator = true) => {
+        if (showIndicator) {
+            setIsLoading(true);
+        }
+        setError(null);
+        try {
+            console.log('[MemoryVault] Fetching memories from API /memory-vault...');
+            const response = await api.get('/memory-vault');
+            console.log('[MemoryVault] API Response success:', response.success);
+            let memoriesList: ApiMemory[] | null = null;
+            if (response.success && response.data) {
+                if (response.data.data && Array.isArray(response.data.data.memories)) {
+                    memoriesList = response.data.data.memories;
+                } else if (Array.isArray(response.data.data)) {
+                    memoriesList = response.data.data;
+                } else if (Array.isArray(response.data.memories)) {
+                    memoriesList = response.data.memories;
+                } else if (Array.isArray(response.data)) {
+                    memoriesList = response.data;
+                }
+            }
+
+            if (memoriesList !== null) {
+                console.log(`[MemoryVault] Loaded ${memoriesList.length} memories.`);
+                setMemories(memoriesList);
+            } else {
+                console.warn('[MemoryVault] Unexpected API response format:', response);
+                setError(response.message || 'Failed to retrieve memories.');
+            }
+        } catch (err: any) {
+            console.error('[MemoryVault] Fetch error:', err);
+            setError(err?.message || 'A network error occurred while loading memories.');
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
+        }
+    }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchMemories(false);
+        }, [fetchMemories])
+    );
+
+    const onRefresh = useCallback(() => {
+        setIsRefreshing(true);
+        fetchMemories(false);
+    }, [fetchMemories]);
+
+    const filteredMemories = useMemo(() => {
+        return memories.filter((item: ApiMemory) => {
+            // 1. Category filter
+            if (activeCategory !== 'All') {
+                const categoryTypeMap: Record<string, string> = {
+                    'Photos': 'photo',
+                    'Videos': 'video',
+                    'Notes': 'journal',
+                    'Voice': 'voice'
+                };
+                const mappedType = categoryTypeMap[activeCategory];
+                if (item.type !== mappedType) return false;
+            }
+
+            // 2. Search query filter
+            if (searchQuery.trim()) {
+                const query = searchQuery.toLowerCase().trim();
+                const titleMatch = item.title?.toLowerCase().includes(query);
+                const narrativeMatch = item.narrative?.toLowerCase().includes(query);
+                const tagMatch = item.tags?.some(tag => tag.toLowerCase().includes(query));
+                return titleMatch || narrativeMatch || tagMatch;
+            }
+
+            return true;
+        });
+    }, [memories, activeCategory, searchQuery]);
+
+    const renderContent = () => {
+        if (isLoading) {
+            return (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: vs(100) }}>
+                    <ActivityIndicator size="large" color={colors.primaryAlt || '#8EA281'} />
+                    <Text style={{ marginTop: vs(12), color: colors.textMuted, fontFamily: FONTS.sans, fontSize: ms(14) }}>
+                        Loading memories...
+                    </Text>
+                </View>
+            );
+        }
+
+        if (error) {
+            return (
+                <View style={styles.errorContainer}>
+                    <Feather name="alert-circle" size={ms(48)} color="#E88B8B" />
+                    <Text style={[styles.errorText, { color: colors.textDark }]}>{error}</Text>
+                    <TouchableOpacity
+                        style={[styles.retryBtn, { backgroundColor: colors.primaryAlt }]}
+                        onPress={() => fetchMemories()}
+                    >
+                        <Text style={styles.retryText}>Retry</Text>
+                    </TouchableOpacity>
+                </View>
+            );
+        }
+
+        if (filteredMemories.length === 0) {
+            return (
+                <View style={styles.emptyContainer}>
+                    <Feather name="folder-minus" size={ms(48)} color={colors.textMuted} />
+                    <Text style={[styles.emptyText, { color: colors.textDark }]}>No memories found</Text>
+                    <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>
+                        {searchQuery ? 'Try adjusting your search filters' : 'Start preserving your family legacy by adding a memory'}
+                    </Text>
+                </View>
+            );
+        }
+
+        return filteredMemories.map(item => {
+            const hasHeroImage = (item.type === 'photo' || item.type === 'video') && item.files && item.files.length > 0;
+            const mediaUrl = hasHeroImage ? resolveMediaUrl(item.files[0]?.url) : undefined;
+            const displayType = displayTypeMap[item.type] || 'Note';
+
+            return (
+                <View key={item.id} style={[styles.memoryCard, { backgroundColor: getCardBg(item.type, isDarkMode) }]}>
+                    {mediaUrl ? (
+                        <Image source={{ uri: mediaUrl }} style={styles.cardHero} />
+                    ) : null}
+                    <View style={styles.cardContent}>
+                        <View style={styles.topRow}>
+                            {!mediaUrl && (
+                                <View style={[
+                                    styles.iconCircle,
+                                    {
+                                        backgroundColor: isDarkMode ? '#4A5560' : '#A6B4BD',
+                                        borderRadius: ms(16),
+                                        width: ms(48),
+                                        height: ms(48)
+                                    }
+                                ]}>
+                                    <Feather
+                                        name={item.type === 'voice' ? 'mic' : 'file-text'}
+                                        size={ms(24)}
+                                        color="#FFF"
+                                    />
+                                </View>
+                            )}
+                            <View style={{ flex: 1, marginLeft: !mediaUrl ? ms(12) : 0 }}>
+                                <Text style={[styles.cardTitle, { color: isDarkMode ? '#8EA281' : colors.textDark }]}>{item.title}</Text>
+                                <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
+                                    {item.whoseMemoryIsThis} · {formatDate(item.date)}
+                                </Text>
+                            </View>
+                            <View style={[
+                                styles.typePill,
+                                {
+                                    backgroundColor: getPillBg(item.type, isDarkMode),
+                                    borderRadius: ms(12)
+                                }
+                            ]}>
+                                <Text style={styles.typeText}>{displayType}</Text>
+                            </View>
+                        </View>
+
+                        <Text style={[styles.cardDesc, { color: isDarkMode ? '#A1A1A1' : '#5B605B', marginTop: vs(8) }]} numberOfLines={3}>
+                            {item.narrative}
+                        </Text>
+
+                        {item.tags && item.tags.length > 0 && (
+                            <View style={[styles.tagRow, { marginTop: vs(8) }]}>
+                                {item.tags.map((t: string) => (
+                                    <View
+                                        key={t}
+                                        style={[
+                                            styles.cardTag,
+                                            {
+                                                backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : '#E2E7EA',
+                                                borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.15)' : '#B7C5CE',
+                                                borderWidth: 1,
+                                                borderRadius: ms(20)
+                                            }
+                                        ]}
+                                    >
+                                        <Text style={[styles.cardTagText, { color: isDarkMode ? 'rgba(255, 255, 255, 0.7)' : '#8398A9' }]}>
+                                            {formatTag(t)}
+                                        </Text>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
+                    </View>
+                </View>
+            );
+        });
+    };
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -127,7 +303,9 @@ export default function MemoryVaultScreen() {
             <View style={styles.header}>
                 <View>
                     <Text style={[styles.title, { color: colors.textDark }]}>Memory Vault</Text>
-                    <Text style={[styles.subtitle, { color: colors.textMuted }]}>6 memories preserved</Text>
+                    <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+                        {isLoading ? 'Loading memories...' : `${memories.length} ${memories.length === 1 ? 'memory' : 'memories'} preserved`}
+                    </Text>
                 </View>
                 <TouchableOpacity
                     style={[styles.iconBtn, { borderColor: colors.border }]}
@@ -141,6 +319,13 @@ export default function MemoryVaultScreen() {
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.listContent}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={onRefresh}
+                        colors={[colors.primaryAlt || '#8EA281']}
+                    />
+                }
             >
                 {/* Moved Search Bar inside Scroll */}
                 <View style={styles.searchSection}>
@@ -177,90 +362,25 @@ export default function MemoryVaultScreen() {
                     </ScrollView>
 
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.scrollGap, { marginTop: vs(12) }]}>
-                        {quickTags.map(tag => (
-                            <TouchableOpacity key={tag} style={styles.tagOutline}>
-                                <Text style={[styles.tagOutlineText, { color: '#7A9BA7' }]}>{tag}</Text>
-                            </TouchableOpacity>
-                        ))}
+                        {quickTags.map(tag => {
+                            const isTagAct = searchQuery === tag;
+                            return (
+                                <TouchableOpacity
+                                    key={tag}
+                                    style={[
+                                        styles.tagOutline,
+                                        isTagAct && { backgroundColor: '#7A9BA7' }
+                                    ]}
+                                    onPress={() => setSearchQuery(isTagAct ? '' : tag)}
+                                >
+                                    <Text style={[styles.tagOutlineText, { color: isTagAct ? '#FFF' : '#7A9BA7' }]}>{tag}</Text>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </ScrollView>
                 </View>
-                {VAULT_DATA.map(item => (
-                    <View key={item.id} style={[styles.memoryCard, { backgroundColor: isDarkMode ? item.darkBgColor : item.bgColor }]}>
-                        {item.image && (
-                            <Image source={item.image} style={styles.cardHero} />
-                        )}
-                        <View style={styles.cardContent}>
-                            <View style={styles.topRow}>
-                                {/* Enhanced Conditional Rendering for Audio/Document Layout */}
-                                {!item.image && (
-                                    <View style={[
-                                        styles.iconCircle,
-                                        {
-                                            backgroundColor: isDarkMode ? '#4A5560' : '#A6B4BD', // Derived from provided color palette
-                                            borderRadius: ms(16), // As seen in sample
-                                            width: ms(48), // Enlarged to properly anchor the taller row
-                                            height: ms(48)
-                                        }
-                                    ]}>
-                                        <Feather
-                                            name={item.type === 'Voice' ? 'mic' : 'file-text'}
-                                            size={ms(24)}
-                                            color="#FFF"
-                                        />
-                                    </View>
-                                )}
-                                <View style={{ flex: 1, marginLeft: !item.image ? ms(12) : 0 }}>
-                                    <Text style={[styles.cardTitle, { color: isDarkMode ? '#8EA281' : colors.textDark }]}>{item.title}</Text>
-                                    <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
-                                        {item.author} · {item.date}
-                                    </Text>
 
-                                    {/* Sub-Row specific to Voice content execution */}
-                                    {item.duration && (
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: vs(6) }}>
-                                            <Feather name="play" size={ms(16)} color="#8A8AA8" />
-                                            <Text style={{ color: '#8A8AA8', fontSize: ms(14), marginLeft: ms(4), fontFamily: FONTS.sans }}>
-                                                {item.duration}
-                                            </Text>
-                                        </View>
-                                    )}
-                                </View>
-                                <View style={[
-                                    styles.typePill,
-                                    {
-                                        backgroundColor: isDarkMode ? '#8EA281' : (item.type === 'Voice' || item.type === 'Journal' ? '#A2B5C1' : 'rgba(0,0,0,0.15)'),
-                                        borderRadius: ms(12)
-                                    }
-                                ]}>
-                                    <Text style={styles.typeText}>{item.type}</Text>
-                                </View>
-                            </View>
-
-                            <Text style={[styles.cardDesc, { color: isDarkMode ? '#A1A1A1' : '#5B605B', marginTop: vs(8) }]} numberOfLines={3}>
-                                {item.description}
-                            </Text>
-
-                            <View style={[styles.tagRow, { marginTop: vs(8) }]}>
-                                {item.tags.map(t => (
-                                    <View
-                                        key={t}
-                                        style={[
-                                            styles.cardTag,
-                                            {
-                                                backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.08)' : '#E2E7EA',
-                                                borderColor: isDarkMode ? 'rgba(255, 255, 255, 0.15)' : '#B7C5CE',
-                                                borderWidth: 1,
-                                                borderRadius: ms(20)
-                                            }
-                                        ]}
-                                    >
-                                        <Text style={[styles.cardTagText, { color: isDarkMode ? 'rgba(255, 255, 255, 0.7)' : '#8398A9' }]}>{t}</Text>
-                                    </View>
-                                ))}
-                            </View>
-                        </View>
-                    </View>
-                ))}
+                {renderContent()}
 
                 {/* Inline Submit Action integrated at the bottom of the feed */}
                 <View style={styles.fabContainer}>
@@ -454,5 +574,50 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         fontSize: ms(14),
         fontFamily: FONTS.sans,
-    }
+    },
+    errorContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: vs(40),
+        paddingHorizontal: ms(20),
+        gap: vs(12),
+    },
+    errorText: {
+        fontFamily: FONTS.serif,
+        fontSize: ms(16),
+        textAlign: 'center',
+        lineHeight: vs(22),
+    },
+    retryBtn: {
+        paddingHorizontal: ms(20),
+        paddingVertical: vs(10),
+        borderRadius: ms(10),
+        marginTop: vs(8),
+    },
+    retryText: {
+        color: '#FFFFFF',
+        fontFamily: FONTS.sans,
+        fontWeight: '600',
+        fontSize: ms(14),
+    },
+    emptyContainer: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: vs(60),
+        paddingHorizontal: ms(30),
+        gap: vs(8),
+    },
+    emptyText: {
+        fontFamily: FONTS.serif,
+        fontSize: ms(18),
+        fontWeight: '600',
+        marginTop: vs(12),
+    },
+    emptySubtext: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(13),
+        textAlign: 'center',
+        lineHeight: vs(18),
+        opacity: 0.8,
+    },
 });
