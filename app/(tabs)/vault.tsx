@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ms, vs } from 'react-native-size-matters';
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 export interface ApiMemory {
     id: string;
@@ -86,6 +87,26 @@ const displayTypeMap: Record<string, string> = {
     'video': 'Video',
     'voice': 'Voice',
     'journal': 'Journal'
+};
+
+const VideoPreview = ({ url, style }: { url: string; style: any }) => {
+    const player = useVideoPlayer({ uri: url, useCaching: true }, player => {
+        player.muted = true;
+        player.loop = false;
+        player.bufferOptions = {
+            preferredForwardBufferDuration: 60,
+            waitsToMinimizeStalling: true,
+            minBufferForPlayback: 2,
+            prioritizeTimeOverSizeThreshold: true,
+        };
+    });
+    return (
+        <VideoView
+            player={player}
+            style={style}
+            nativeControls={false}
+        />
+    );
 };
 
 export default function MemoryVaultScreen() {
@@ -225,10 +246,24 @@ export default function MemoryVaultScreen() {
             const displayType = displayTypeMap[item.type] || 'Note';
 
             return (
-                <View key={item.id} style={[styles.memoryCard, { backgroundColor: getCardBg(item.type, isDarkMode) }]}>
-                    {mediaUrl ? (
+                <TouchableOpacity
+                    key={item.id}
+                    activeOpacity={0.9}
+                    onPress={() => router.push({ pathname: '/memory/[id]', params: { id: item.id } })}
+                    style={[styles.memoryCard, { backgroundColor: getCardBg(item.type, isDarkMode) }]}
+                >
+                    {item.type === 'video' && mediaUrl ? (
+                        <View style={styles.heroContainer}>
+                            <VideoPreview url={mediaUrl} style={styles.cardHero} />
+                            <View style={styles.playOverlay}>
+                                <View style={styles.playIconCircle}>
+                                    <Feather name="play" size={ms(20)} color="#FFF" style={{ marginLeft: ms(2) }} />
+                                </View>
+                            </View>
+                        </View>
+                    ) : (item.type === 'photo' && mediaUrl ? (
                         <Image source={{ uri: mediaUrl }} style={styles.cardHero} />
-                    ) : null}
+                    ) : null)}
                     <View style={styles.cardContent}>
                         <View style={styles.topRow}>
                             {!mediaUrl && (
@@ -292,7 +327,7 @@ export default function MemoryVaultScreen() {
                             </View>
                         )}
                     </View>
-                </View>
+                </TouchableOpacity>
             );
         });
     };
@@ -493,6 +528,25 @@ const styles = StyleSheet.create({
         width: '100%',
         height: vs(160),
         resizeMode: 'cover',
+    },
+    heroContainer: {
+        position: 'relative',
+        width: '100%',
+        height: vs(160),
+    },
+    playOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    playIconCircle: {
+        width: ms(40),
+        height: ms(40),
+        borderRadius: ms(20),
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     cardContent: {
         padding: ms(12),

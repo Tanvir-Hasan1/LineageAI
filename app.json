@@ -45,7 +45,9 @@
           "photosPermission": "The app accesses your photos to let you share memories.",
           "cameraPermission": "The app accesses your camera to let you capture memories."
         }
-      ]
+      ],
+      "expo-video",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,
