@@ -3,17 +3,20 @@ import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ms, vs } from 'react-native-size-matters';
 import { FONTS } from '@/constants/theme';
+import { useVideoPlayer, VideoView } from 'expo-video';
 
 // Shared explicit interface to power full application chronology
 export type TimelineDataPoint = {
     id: string;
+    memoryId?: string;
     year: string;
-    type: 'text' | 'image' | 'audio';
+    type: 'text' | 'image' | 'audio' | 'video';
     title: string;
     author: string;
     date: string;
     content?: string;
     image?: any;
+    videoUrl?: string;
     tags?: string[];
     bgColor?: string;
     darkBgColor?: string;
@@ -24,9 +27,30 @@ interface TimelineEntryProps {
     index: number;
     isDarkMode: boolean;
     colors: any; // Standardised theme palette injection
+    onPress?: (id: string) => void;
 }
 
-export const TimelineEntry: React.FC<TimelineEntryProps> = ({ item, index, isDarkMode, colors }) => {
+const VideoPreview = ({ url, style }: { url: string; style: any }) => {
+    const player = useVideoPlayer({ uri: url, useCaching: true }, player => {
+        player.muted = true;
+        player.loop = false;
+        player.bufferOptions = {
+            preferredForwardBufferDuration: 60,
+            waitsToMinimizeStalling: true,
+            minBufferForPlayback: 2,
+            prioritizeTimeOverSizeThreshold: true,
+        };
+    });
+    return (
+        <VideoView
+            player={player}
+            style={style}
+            nativeControls={false}
+        />
+    );
+};
+
+export const TimelineEntry: React.FC<TimelineEntryProps> = ({ item, index, isDarkMode, colors, onPress }) => {
     return (
         <View style={styles.timelineEntry}>
             {/* The Hollow Ring node on the axis - matching User reference target exactly */}
@@ -53,17 +77,27 @@ export const TimelineEntry: React.FC<TimelineEntryProps> = ({ item, index, isDar
                 {/* Physical Card Body */}
                 <TouchableOpacity 
                     activeOpacity={0.9}
+                    onPress={() => onPress?.(item.memoryId || item.id)}
                     style={[styles.cardBody, { backgroundColor: isDarkMode ? item.darkBgColor : item.bgColor }]}
                 >
-                    {item.image && (
+                    {item.type === 'video' && item.videoUrl ? (
+                        <View style={styles.imageContainer}>
+                            <VideoPreview url={item.videoUrl} style={styles.cardImage} />
+                            <View style={styles.playOverlay}>
+                                <View style={styles.playIconCircle}>
+                                    <Feather name="play" size={ms(18)} color="#FFF" style={{ marginLeft: ms(2) }} />
+                                </View>
+                            </View>
+                        </View>
+                    ) : (item.image ? (
                         <View style={styles.imageContainer}>
                             <Image source={item.image} style={styles.cardImage} />
                         </View>
-                    )}
+                    ) : null)}
                     
                     <View style={styles.cardContent}>
                         <View style={styles.contentHeader}>
-                            {item.type !== 'image' && (
+                            {item.type !== 'image' && item.type !== 'video' && (
                                 <View style={[styles.iconCircle, { backgroundColor: 'rgba(0,0,0,0.1)' }]}>
                                     {item.type === 'text' ? (
                                         <Feather name="file-text" size={ms(18)} color="#757A75" />
@@ -72,7 +106,7 @@ export const TimelineEntry: React.FC<TimelineEntryProps> = ({ item, index, isDar
                                     )}
                                 </View>
                             )}
-                            <View style={[styles.titleLayout, item.type === 'image' && { paddingVertical: vs(8) }]}>
+                            <View style={[styles.titleLayout, (item.type === 'image' || item.type === 'video') && { paddingVertical: vs(8) }]}>
                                 <Text style={[styles.itemTitle, { color: colors.textDark }]}>{item.title}</Text>
                                 <Text style={[styles.itemMeta, { color: colors.textMuted }]}>
                                     {item.author} · {item.date}
@@ -233,5 +267,19 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.sans,
         fontSize: ms(10),
         fontWeight: '500',
-    }
+    },
+    playOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    playIconCircle: {
+        width: ms(36),
+        height: ms(36),
+        borderRadius: ms(18),
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
 });

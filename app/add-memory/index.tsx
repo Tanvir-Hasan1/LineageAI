@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ms, vs } from 'react-native-size-matters';
 import { useAuth } from '@/hooks/use-auth';
 import { useMemoryStore } from '@/store/memory-store';
-import { getAvatarSource } from '@/utils/image';
+import { getAvatarSource, resolveMediaUrl } from '@/utils/image';
 
 // Assets local pointers mapping
 const AVATARS = {
@@ -37,7 +37,7 @@ const STEPS = ['Type', 'Story', 'Tags', 'Save'];
 export default function AddMemoryScreen() {
     const router = useRouter();
     const isDarkMode = useColorScheme() === 'dark';
-    const { user } = useAuth();
+    const { user, familyMembers } = useAuth();
     const { resetDraft, setDraft } = useMemoryStore();
 
     const personas = useMemo(() => {
@@ -48,19 +48,15 @@ export default function AddMemoryScreen() {
             id: 'mine',
             name: 'Mine',
             displayName: user?.name || user?.firstName || 'Sarah Mitchell',
-            img: AVATARS.mine,
+            img: getAvatarSource(user),
             isSelf: true
         });
 
         // 2. Add family members
-        if (user?.familyMembers && user.familyMembers.length > 0) {
-            user.familyMembers.forEach((member) => {
-                let img = AVATARS.margaret;
-                if (member.name.toLowerCase().includes('margaret')) {
-                    img = AVATARS.margaret;
-                } else if (member.name.toLowerCase().includes('robert')) {
-                    img = AVATARS.robert;
-                }
+        if (familyMembers && familyMembers.length > 0) {
+            familyMembers.forEach((member) => {
+                const avatarUrl = member.profilePicture?.url ? resolveMediaUrl(member.profilePicture.url) : null;
+                const img = avatarUrl ? { uri: avatarUrl } : (member.name?.toLowerCase().includes('robert') ? AVATARS.robert : AVATARS.margaret);
                 
                 list.push({
                     id: member.userId || member.email,
@@ -73,7 +69,7 @@ export default function AddMemoryScreen() {
         }
 
         return list;
-    }, [user]);
+    }, [user, familyMembers]);
 
     // State Logic
     const [selectedType, setSelectedType] = useState<'photo' | 'video' | 'voice' | 'journal'>('photo');

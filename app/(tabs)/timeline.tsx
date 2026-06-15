@@ -47,7 +47,7 @@ function mapMemory(mem: any, idx: number): TimelineDataPoint {
     // Determine media type
     let type: TimelineDataPoint['type'] = 'text';
     if (mem.type === 'photo') type = 'image';
-    else if (mem.type === 'video') type = 'image'; // show thumbnail
+    else if (mem.type === 'video') type = 'video';
     else if (mem.type === 'voice') type = 'audio';
 
     // Resolve image URL for photo/video memories
@@ -64,6 +64,7 @@ function mapMemory(mem: any, idx: number): TimelineDataPoint {
         content:  mem.narrative || undefined,
         tags:     Array.isArray(mem.tags) && mem.tags.length ? mem.tags : undefined,
         image:    type === 'image' && fileUrl ? { uri: fileUrl } : undefined,
+        videoUrl: type === 'video' && fileUrl ? fileUrl : undefined,
         ...palette,
     };
 }
@@ -80,17 +81,22 @@ export default function TimelineScreen() {
     const colors    = useAppTheme();
     const isDarkMode = useColorScheme() === 'dark';
     const router    = useRouter();
-    const { user }  = useAuth();
+    const { user, familyMembers, fetchFamilyMembers } = useAuth();
 
     // ── Filter chips built from family members ───────────────────────────────
     const filterChips: FilterChip[] = [
         { id: 'mine', label: 'Yours' },
-        ...(user?.familyMembers?.map((m: any) => ({
-            id:     m.userId,
-            label:  m.name,
-            userId: m.userId,
-            avatar: m.name?.toLowerCase().includes('robert') ? AVATARS.robert : AVATARS.margaret,
-        })) ?? []),
+        ...(familyMembers
+            ?.filter((m: any) => m.status?.toLowerCase() === 'accepted')
+            ?.map((m: any) => {
+                const avatarUrl = m.profilePicture?.url ? resolveMediaUrl(m.profilePicture.url) : null;
+                return {
+                    id:     m.userId,
+                    label:  m.name,
+                    userId: m.userId,
+                    avatar: avatarUrl ? { uri: avatarUrl } : (m.name?.toLowerCase().includes('robert') ? AVATARS.robert : AVATARS.margaret),
+                };
+            }) ?? []),
     ];
 
     const [activeChipId, setActiveChipId] = useState('mine');
@@ -153,14 +159,15 @@ export default function TimelineScreen() {
             setIsRefreshing(false);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id, user?.familyMembers]);
+    }, [user?.id, familyMembers]);
 
     // Refetch whenever the screen comes into focus
     useFocusEffect(
         useCallback(() => {
             fetchTimeline(activeChipId, false);
+            fetchFamilyMembers().catch(err => console.error('[Timeline] Failed to sync family members:', err));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, [activeChipId])
+        }, [activeChipId, fetchFamilyMembers])
     );
 
     const handleChipPress = (chipId: string) => {
@@ -288,6 +295,9 @@ export default function TimelineScreen() {
                                 index={index}
                                 isDarkMode={isDarkMode}
                                 colors={colors}
+                                onPress={(id) => {
+                                    router.push({ pathname: '/memory/[id]' as any, params: { id } });
+                                }}
                             />
                         ))}
                         <View style={{ height: vs(100) }} />

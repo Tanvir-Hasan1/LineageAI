@@ -3,6 +3,8 @@ import { SecureStorageService } from '@/utils/storage';
 import { create } from 'zustand';
 
 export interface AuthStore extends AuthState {
+  familyMembers: any[];
+  fetchFamilyMembers: () => Promise<void>;
   signIn: (token: string, refreshToken: string | null, userData: User) => Promise<void>;
   signOut: () => Promise<void>;
   updateUser: (userData: Partial<User>) => Promise<void>;
@@ -20,8 +22,22 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   refreshToken: null,
   isLoading: true,
   isProfilePictureLoading: false,
+  familyMembers: [],
 
   setProfilePictureLoading: (isLoading: boolean) => set({ isProfilePictureLoading: isLoading }),
+
+  fetchFamilyMembers: async () => {
+    try {
+      const { api } = require('@/services/api');
+      const response = await api.get('/users/family-members');
+      if (response.success) {
+        const members = response.data?.data || response.data || [];
+        set({ familyMembers: Array.isArray(members) ? members : [] });
+      }
+    } catch (error) {
+      console.error('[AuthStore] Failed to fetch family members:', error);
+    }
+  },
 
   initialize: async () => {
     try {
@@ -41,6 +57,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
         // Silently fetch and sync fresh profile data from /auth/me in background
         get().fetchProfile().catch((err) => console.error('Silent profile sync failed:', err));
+        get().fetchFamilyMembers().catch((err) => console.error('Silent family members sync failed:', err));
       } else {
         set({ isLoading: false });
       }
@@ -100,6 +117,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         token,
         refreshToken,
         isLoading: false,
+        familyMembers: [],
       });
     } catch (error) {
       console.error('Sign-in persistence failed:', error);
@@ -119,6 +137,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         token: null,
         refreshToken: null,
         isLoading: false,
+        familyMembers: [],
       });
     } catch (error) {
       console.error('Sign-out failed:', error);

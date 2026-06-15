@@ -8,6 +8,7 @@ import {
     Image, 
     useColorScheme,
     ActivityIndicator,
+    Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +18,7 @@ import { FONTS } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/services/api';
+import { resolveMediaUrl } from '@/utils/image';
 
 // STANDALONE SUBCOMPONENT IMPORT
 import InviteModal from '@/components/InviteModal';
@@ -33,6 +35,13 @@ interface FamilyMember {
     role: string;
     status: string;
     relation?: string;
+    profilePicture?: {
+        key: string;
+        url: string;
+        originalName: string;
+        mimeType: string;
+        size: number;
+    };
 }
 
 export default function FamilyAccessScreen() {
@@ -44,6 +53,11 @@ export default function FamilyAccessScreen() {
     const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // ── Invitations State ─────────────────────────────────────────────────────
+    const [invitations, setInvitations] = useState<any[]>([]);
+    const [isInvitationsLoading, setIsInvitationsLoading] = useState(true);
+    const [actioningId, setActioningId] = useState<string | null>(null);
 
     const fetchFamilyMembers = useCallback(async () => {
         setIsLoading(true);
@@ -67,12 +81,76 @@ export default function FamilyAccessScreen() {
             setError(err?.message || 'A network error occurred.');
         } finally {
             setIsLoading(false);
+            // Sync with global auth store to keep timeline and other views updated
+            const { useAuthStore } = require('@/store/auth-store');
+            useAuthStore.getState().fetchFamilyMembers().catch((err: any) => console.error('[FamilyAccess] Store sync failed:', err));
+        }
+    }, []);
+
+    const fetchInvitations = useCallback(async () => {
+        setIsInvitationsLoading(true);
+        try {
+            console.log('[FamilyAccess] Fetching /users/invitations...');
+            const response = await api.get('/users/invitations');
+            console.log('[FamilyAccess] Invitations Response:', JSON.stringify(response));
+            if (response.success && Array.isArray(response.data?.data)) {
+                setInvitations(response.data.data);
+            } else if (response.success && Array.isArray(response.data)) {
+                setInvitations(response.data);
+            } else {
+                setInvitations([]);
+            }
+        } catch (err) {
+            console.error('[FamilyAccess] Fetch invitations error:', err);
+        } finally {
+            setIsInvitationsLoading(false);
         }
     }, []);
 
     useEffect(() => {
         fetchFamilyMembers();
-    }, [fetchFamilyMembers]);
+        fetchInvitations();
+    }, [fetchFamilyMembers, fetchInvitations]);
+
+    const handleAcceptInvitation = async (id: string) => {
+        triggerHaptic();
+        setActioningId(id);
+        try {
+            console.log(`[FamilyAccess] Accepting invitation: ${id}`);
+            const response = await api.post(`/users/invitations/${id}/accept`);
+            if (response.success) {
+                Alert.alert('Success', 'Invitation accepted successfully!');
+                await Promise.all([fetchFamilyMembers(), fetchInvitations()]);
+            } else {
+                Alert.alert('Error', response.message || 'Failed to accept invitation.');
+            }
+        } catch (err: any) {
+            console.error('[FamilyAccess] Accept error:', err);
+            Alert.alert('Error', err?.message || 'An error occurred while accepting.');
+        } finally {
+            setActioningId(null);
+        }
+    };
+
+    const handleDeclineInvitation = async (id: string) => {
+        triggerHaptic();
+        setActioningId(id);
+        try {
+            console.log(`[FamilyAccess] Declining invitation: ${id}`);
+            const response = await api.post(`/users/invitations/${id}/decline`);
+            if (response.success) {
+                Alert.alert('Success', 'Invitation declined successfully!');
+                await Promise.all([fetchFamilyMembers(), fetchInvitations()]);
+            } else {
+                Alert.alert('Error', response.message || 'Failed to decline invitation.');
+            }
+        } catch (err: any) {
+            console.error('[FamilyAccess] Decline error:', err);
+            Alert.alert('Error', err?.message || 'An error occurred while declining.');
+        } finally {
+            setActioningId(null);
+        }
+    };
 
 
     const [inviteVisible, setInviteVisible] = useState(false);
@@ -176,7 +254,10 @@ export default function FamilyAccessScreen() {
                         const isPending = member.status?.toLowerCase() === 'pending';
                         const cardBg = idx % 2 === 0 ? palette.card1Bg : palette.card2Bg;
                         const badgeBg = idx % 2 === 0 ? palette.badge1Bg : palette.badge2Bg;
-                        const avatarSource = idx % 2 === 0 ? IMG_AVATAR_SARAH : IMG_AVATAR_JAMES;
+                        
+                        // Pick profile picture if available, fallback to mock avatars
+                        const avatarUrl = member.profilePicture?.url ? resolveMediaUrl(member.profilePicture.url) : null;
+                        const avatarSource = avatarUrl ? { uri: avatarUrl } : (idx % 2 === 0 ? IMG_AVATAR_SARAH : IMG_AVATAR_JAMES);
 
                         return (
                             <View key={member.userId || String(idx)} style={[styles.memberCard, { backgroundColor: cardBg }]}>
@@ -207,8 +288,100 @@ export default function FamilyAccessScreen() {
                     })
                 )}
 
+                {/* INVITATIONS SECTION */}
+                <Text style={[styles.sectionHeader, { color: isDarkMode ? '#AFAFB9' : '#3A3C45', marginTop: vs(28) }]}>INVITATIONS</Text>
+
+                {isInvitationsLoading ? (
+                    <View style={styles.centeredState}>
+                        <ActivityIndicator size="small" color="#8EA281" />
+                        <Text style={[styles.stateText, { color: palette.textSub, fontSize: ms(14) }]}>Loading invitations...</Text>
+                    </View>
+                ) : invitations.length === 0 ? (
+                    <View style={[styles.centeredState, { paddingVertical: vs(20) }]}>
+                        <Feather name="mail" size={ms(32)} color={palette.textSub} />
+                        <Text style={[styles.stateSubText, { color: palette.textSub, marginTop: vs(8) }]}>No invitations at this time.</Text>
+                    </View>
+                ) : (
+                    invitations.map((invite, idx) => {
+                        const isPending = invite.status?.toLowerCase() === 'pending';
+                        const isReceived = invite.direction?.toLowerCase() === 'received';
+                        const cardBg = idx % 2 === 0 ? palette.card2Bg : palette.card1Bg;
+                        const isActioning = actioningId === invite.id;
+
+                        // Resolve name, email, and description based on direction
+                        const displayName = isReceived 
+                            ? (invite.inviter?.name || 'Incoming Invite')
+                            : (invite.inviteeName || invite.inviteeEmail);
+
+                        const displayEmail = isReceived
+                            ? (invite.inviter?.email || '')
+                            : invite.inviteeEmail;
+
+                        const directionLabel = isReceived ? 'Received' : 'Sent';
+
+                        return (
+                            <View key={invite.id || String(idx)} style={[styles.inviteCard, { backgroundColor: cardBg }]}>
+                                <View style={styles.inviteCardHeader}>
+                                    <Feather 
+                                        name={isReceived ? "arrow-down-left" : "arrow-up-right"} 
+                                        size={ms(18)} 
+                                        color={isReceived ? "#8EA281" : "#E0923C"} 
+                                        style={{ marginRight: ms(10) }} 
+                                    />
+                                    <View style={styles.inviteCardContent}>
+                                        <Text style={[styles.memberName, { color: isDarkMode ? '#FFFFFF' : '#2D2C39' }]}>
+                                            {displayName}
+                                        </Text>
+                                        {displayEmail ? (
+                                            <Text style={[styles.memberEmail, { color: isDarkMode ? '#8F8F9E' : '#8A8A95' }]}>
+                                                {displayEmail}
+                                            </Text>
+                                        ) : null}
+                                        <Text style={[styles.memberSubText, { color: isDarkMode ? '#A0A0A0' : '#7F7F8F', marginTop: vs(2) }]}>
+                                            Relation: <Text style={{ fontWeight: '600' }}>{invite.relation}</Text> • Role: <Text style={{ fontWeight: '600' }}>{invite.role}</Text>
+                                        </Text>
+                                    </View>
+                                    <View style={{ alignItems: 'flex-end', gap: vs(4) }}>
+                                        <View style={[styles.roleBadge, { backgroundColor: isReceived ? '#5A5670' : '#4E5D68', paddingVertical: vs(2), paddingHorizontal: ms(6), borderRadius: ms(8) }]}>
+                                            <Text style={[styles.badgeText, { fontSize: ms(10) }]}>{directionLabel}</Text>
+                                        </View>
+                                        <View style={[styles.roleBadge, { backgroundColor: isPending ? '#E0923C' : '#8EA281', paddingVertical: vs(2), paddingHorizontal: ms(6), borderRadius: ms(8) }]}>
+                                            <Text style={[styles.badgeText, { fontSize: ms(10) }]}>
+                                                {invite.status?.charAt(0).toUpperCase() + invite.status?.slice(1)}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {isPending && isReceived && (
+                                    <View style={styles.inviteCardActions}>
+                                        {isActioning ? (
+                                            <ActivityIndicator size="small" color="#8EA281" />
+                                        ) : (
+                                            <>
+                                                <TouchableOpacity 
+                                                    style={[styles.declineBtn, { borderColor: isDarkMode ? '#FF8B8B' : '#E88B8B' }]}
+                                                    onPress={() => handleDeclineInvitation(invite.id)}
+                                                >
+                                                    <Text style={[styles.btnText, { color: isDarkMode ? '#FF8B8B' : '#E88B8B' }]}>Decline</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity 
+                                                    style={[styles.acceptBtn, { backgroundColor: '#8EA281' }]}
+                                                    onPress={() => handleAcceptInvitation(invite.id)}
+                                                >
+                                                    <Text style={[styles.btnText, { color: '#FFFFFF' }]}>Accept</Text>
+                                                </TouchableOpacity>
+                                            </>
+                                        )}
+                                    </View>
+                                )}
+                            </View>
+                        );
+                    })
+                )}
+
                 {/* BOTTOM CAPSULE */}
-                <View style={[styles.infoCapsule, { backgroundColor: palette.infoPodBg }]}>
+                <View style={[styles.infoCapsule, { backgroundColor: palette.infoPodBg, marginTop: vs(24) }]}>
                     <Feather name="shield" size={ms(14)} color={palette.infoPodText} style={{ marginRight: ms(10), marginTop: vs(2) }} />
                     <Text style={[styles.infoCapsuleText, { color: palette.infoPodText }]}>
                         All members access the archive based on their role. Owners can revoke access at any time. Sensitive settings are always private.
@@ -222,6 +395,10 @@ export default function FamilyAccessScreen() {
                 visible={inviteVisible} 
                 onClose={() => setInviteVisible(false)} 
                 isDarkMode={isDarkMode} 
+                onInviteSuccess={() => {
+                    fetchFamilyMembers();
+                    fetchInvitations();
+                }}
             />
 
         </SafeAreaView>
@@ -385,5 +562,51 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.sans,
         fontWeight: '600',
         fontSize: ms(14),
+    },
+    inviteCard: {
+        width: '100%',
+        borderRadius: ms(20),
+        padding: ms(16),
+        marginBottom: vs(12),
+    },
+    inviteCardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    inviteCardContent: {
+        flex: 1,
+    },
+    inviteCardActions: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: ms(12),
+        marginTop: vs(14),
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(128,128,128,0.15)',
+        paddingTop: vs(12),
+    },
+    acceptBtn: {
+        paddingHorizontal: ms(16),
+        paddingVertical: vs(8),
+        borderRadius: ms(10),
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    declineBtn: {
+        paddingHorizontal: ms(16),
+        paddingVertical: vs(8),
+        borderRadius: ms(10),
+        borderWidth: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    btnText: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(13),
+        fontWeight: '600',
+    },
+    memberSubText: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(11),
     },
 });

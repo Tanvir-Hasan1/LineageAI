@@ -18,14 +18,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ms, vs } from 'react-native-size-matters';
 import { useAuth } from '@/hooks/use-auth';
 import { useMemoryStore } from '@/store/memory-store';
-import { getAvatarSource } from '@/utils/image';
+import { getAvatarSource, resolveMediaUrl } from '@/utils/image';
 
 const STEPS = ['Type', 'Story', 'Tags', 'Save'];
 
 export default function SaveReviewScreen() {
     const router = useRouter();
     const isDarkMode = useColorScheme() === 'dark';
-    const { user } = useAuth();
+    const { user, familyMembers } = useAuth();
     const { draft, createMemory, isCreating } = useMemoryStore();
 
     // Chromatic Sync Engine
@@ -75,14 +75,39 @@ export default function SaveReviewScreen() {
     }, [draft.date]);
 
     const personaAvatar = useMemo(() => {
-        if (draft.whoseMemoryIsThis.includes('Margaret')) {
+        const cleanName = (draft.whoseMemoryIsThis || '').trim().toLowerCase();
+        const currentUserName = (user?.name || user?.firstName || '').trim().toLowerCase();
+        
+        // 1. Check if it's the logged-in user
+        if (cleanName === 'self' || cleanName === 'mine' || cleanName === currentUserName) {
+            return getAvatarSource(user);
+        }
+        
+        // 2. Look up in familyMembers list from global auth store
+        const member = familyMembers?.find(
+            (m: any) =>
+                m.name?.trim().toLowerCase() === cleanName ||
+                m.userId === draft.whoseMemoryIsThis ||
+                m.email?.trim().toLowerCase() === cleanName
+        );
+
+        if (member) {
+            const avatarUrl = member.profilePicture?.url ? resolveMediaUrl(member.profilePicture.url) : null;
+            if (avatarUrl) {
+                return { uri: avatarUrl };
+            }
+        }
+        
+        // 3. Fallbacks for Margaret/Robert or default avatar
+        if (cleanName.includes('margaret')) {
             return require('@/assets/images/dashboard/margaret.png');
         }
-        if (draft.whoseMemoryIsThis.includes('Robert')) {
+        if (cleanName.includes('robert')) {
             return require('@/assets/images/dashboard/robert.png');
         }
-        return getAvatarSource(user);
-    }, [draft.whoseMemoryIsThis, user]);
+        
+        return require('@/assets/images/dashboard/avatar.png');
+    }, [draft.whoseMemoryIsThis, user, familyMembers]);
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: palette.bg }]}>

@@ -81,7 +81,7 @@ export default function MemoryDetailScreen() {
     const router = useRouter();
     const colors = useAppTheme();
     const isDarkMode = useColorScheme() === 'dark';
-    const { user } = useAuth();
+    const { user, familyMembers } = useAuth();
 
     const [memory, setMemory] = useState<ApiMemory | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -203,10 +203,27 @@ export default function MemoryDetailScreen() {
         const cleanName = (memory.whoseMemoryIsThis || '').trim().toLowerCase();
         const currentUserName = (user?.name || user?.firstName || '').trim().toLowerCase();
         
+        // 1. Check if it's the logged-in user
         if (cleanName === 'self' || cleanName === 'mine' || cleanName === currentUserName) {
             return getAvatarSource(user);
         }
         
+        // 2. Look up in familyMembers list from global auth store
+        const member = familyMembers?.find(
+            (m: any) =>
+                m.name?.trim().toLowerCase() === cleanName ||
+                m.userId === memory.whoseMemoryIsThis ||
+                m.email?.trim().toLowerCase() === cleanName
+        );
+
+        if (member) {
+            const avatarUrl = member.profilePicture?.url ? resolveMediaUrl(member.profilePicture.url) : null;
+            if (avatarUrl) {
+                return { uri: avatarUrl };
+            }
+        }
+        
+        // 3. Fallbacks for Margaret/Robert or default avatar
         if (cleanName.includes('margaret')) {
             return require('@/assets/images/dashboard/margaret.png');
         }
@@ -215,7 +232,7 @@ export default function MemoryDetailScreen() {
         }
         
         return require('@/assets/images/dashboard/avatar.png');
-    }, [memory, user]);
+    }, [memory, user, familyMembers]);
 
     const fetchMemoryDetail = useCallback(async () => {
         if (!id) return;
