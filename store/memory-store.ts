@@ -1,5 +1,19 @@
 import { create } from 'zustand';
 
+// ── Shared memory shape (mirrors ApiMemory from vault.tsx) ────────────────────
+export interface OpenedMemory {
+  id: string;
+  type: 'photo' | 'video' | 'voice' | 'journal';
+  whoseMemoryIsThis: string;
+  files: { key: string; url: string; originalName: string; mimeType: string; size: number }[];
+  title: string;
+  narrative: string;
+  date: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface MemoryDraft {
   type: 'photo' | 'video' | 'voice' | 'journal';
   whoseMemoryIsThis: string;
@@ -11,6 +25,16 @@ export interface MemoryDraft {
 }
 
 interface MemoryStore {
+  // ── Opened memory cache ───────────────────────────────────────────────────
+  openedMemory: OpenedMemory | null;
+  /** Replace the full cached memory (called when the detail page fetches it). */
+  setOpenedMemory: (memory: OpenedMemory) => void;
+  /** Merge a partial update into the cache (called after a successful edit). */
+  patchOpenedMemory: (updates: Partial<OpenedMemory>) => void;
+  /** Clear cache when navigating away. */
+  clearOpenedMemory: () => void;
+
+  // ── Draft (add-memory flow) ───────────────────────────────────────────────
   draft: MemoryDraft;
   setDraft: (updates: Partial<MemoryDraft>) => void;
   resetDraft: () => void;
@@ -29,6 +53,18 @@ const initialDraft: MemoryDraft = {
 };
 
 export const useMemoryStore = create<MemoryStore>((set, get) => ({
+  // ── Opened memory ─────────────────────────────────────────────────────────
+  openedMemory: null,
+  setOpenedMemory: (memory) => set({ openedMemory: memory }),
+  patchOpenedMemory: (updates) =>
+    set((state) =>
+      state.openedMemory
+        ? { openedMemory: { ...state.openedMemory, ...updates } }
+        : state
+    ),
+  clearOpenedMemory: () => set({ openedMemory: null }),
+
+  // ── Draft ─────────────────────────────────────────────────────────────────
   draft: { ...initialDraft },
   isCreating: false,
   setDraft: (updates) => set((state) => ({ draft: { ...state.draft, ...updates } })),
@@ -96,3 +132,4 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
     }
   },
 }));
+

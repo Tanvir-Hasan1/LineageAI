@@ -7,6 +7,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
+import { useMemoryStore } from '@/store/memory-store';
 import {
     ActivityIndicator,
     Alert,
@@ -70,6 +71,7 @@ export default function EditMemoryScreen() {
     const colors = useAppTheme();
     const isDarkMode = useColorScheme() === 'dark';
     const { user } = useAuth();
+    const { patchOpenedMemory } = useMemoryStore();
 
     // ── Load existing memory ─────────────────────────────────────────────────
     const [isLoadingMemory, setIsLoadingMemory] = useState(true);
@@ -227,6 +229,14 @@ export default function EditMemoryScreen() {
             const res = await api.patch(`/memory-vault/${id}`, body);
             if (res.success) {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                // Instantly update the detail page via the store — no refetch needed
+                patchOpenedMemory({
+                    title: body.title,
+                    narrative: body.narrative,
+                    date: body.date,
+                    whoseMemoryIsThis: body.whoseMemoryIsThis,
+                    tags: body.tags,
+                });
                 Alert.alert('Saved!', 'Memory updated successfully.', [
                     { text: 'OK', onPress: () => router.back() },
                 ]);

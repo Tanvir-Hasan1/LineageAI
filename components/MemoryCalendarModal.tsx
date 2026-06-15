@@ -27,6 +27,15 @@ export const MemoryCalendarModal: React.FC<MemoryCalendarModalProps> = ({
     selectedDate
 }) => {
     const isDarkMode = useColorScheme() === 'dark';
+
+    // Today's date as yyyy-mm-dd — used as the upper boundary for selection
+    const today = new Date().toISOString().split('T')[0];
+
+    // Guard: silently ignore taps on future dates (belt-and-suspenders alongside maxDate)
+    const handleDayPress = (day: any) => {
+        if (day.dateString > today) return;
+        onSelectDate(day);
+    };
     
     // Self-contained thematic hooks matching app aesthetic
     const palette = {
@@ -58,14 +67,15 @@ export const MemoryCalendarModal: React.FC<MemoryCalendarModalProps> = ({
                     {/* Cinematic List-Engine swapped in for real physical animation interpolation */}
                     <View style={{ width: calendarWidth, height: vs(320), overflow: 'hidden' }}>
                         <CalendarList
-                            onDayPress={onSelectDate}
-                            horizontal={true} // Enables native scroll behavior
-                            pagingEnabled={true} // Anchors pages elegantly
-                            calendarWidth={calendarWidth} // Lock size exactly to available modal viewport
-                            staticHeader={false} // Allows month text to scroll together with dates
+                            onDayPress={handleDayPress}
+                            horizontal={true}
+                            pagingEnabled={true}
+                            calendarWidth={calendarWidth}
+                            staticHeader={false}
                             showsHorizontalScrollIndicator={false}
-                            pastScrollRange={60} // 5 Years back
-                            futureScrollRange={12} // 1 Year forward
+                            pastScrollRange={60}   // 5 Years back
+                            futureScrollRange={0}  // No future months
+                            maxDate={today}        // Disable all future dates
                             markedDates={{
                                 [selectedDate]: { selected: true, disableTouchEvent: true }
                             }}

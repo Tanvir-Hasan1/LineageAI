@@ -2,10 +2,11 @@ import { FONTS } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { Feather } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
     ActivityIndicator,
     Image,
+    PanResponder,
     ScrollView,
     StyleSheet,
     Text,
@@ -22,6 +23,7 @@ import { ApiMemory } from '../(tabs)/vault';
 import { useAuth } from '@/hooks/use-auth';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { useMemoryStore, OpenedMemory } from '@/store/memory-store';
 
 const displayTypeMap: Record<string, string> = {
     'photo': 'Photo',
@@ -67,6 +69,13 @@ const formatTag = (tag: string) => {
     return formatted.charAt(0) + formatted.charAt(1).toUpperCase() + formatted.slice(2);
 };
 
+const formatTime = (seconds: number): string => {
+    if (!isFinite(seconds) || isNaN(seconds)) return '0:00';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+};
+
 export default function MemoryDetailScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const router = useRouter();
@@ -79,10 +88,73 @@ export default function MemoryDetailScreen() {
     const [error, setError] = useState<string | null>(null);
     const [showMenu, setShowMenu] = useState(false);
 
+    // Store — opened memory cache
+    const { openedMemory, setOpenedMemory, patchOpenedMemory, clearOpenedMemory } = useMemoryStore();
+
+    // Keep local state in sync when the store is patched from the edit screen
+    useEffect(() => {
+        if (openedMemory && openedMemory.id === id) {
+            setMemory(openedMemory as ApiMemory);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [openedMemory]);
+
     // Audio player — source is set after memory loads
     const audioPlayer = useAudioPlayer('');
     const audioStatus = useAudioPlayerStatus(audioPlayer);
     const isPlayingAudio = audioStatus.playing;
+
+    // Seek bar state
+    const seekBarRef = useRef<View>(null);
+    const seekBarWidth = useRef(0);
+    const seekBarPageX = useRef(0);
+    const [isSeeking, setIsSeeking] = useState(false);
+    const [seekPosition, setSeekPosition] = useState(0); // 0–1 fraction
+
+    const currentTime = isSeeking ? seekPosition * (audioStatus.duration || 0) : (audioStatus.currentTime ?? 0);
+    const duration = audioStatus.duration || 0;
+    const progress = duration > 0 ? currentTime / duration : 0;
+
+    // Live refs so PanResponder callbacks (created once) always see fresh values
+    const durationRef = useRef(0);
+    const audioPlayerRef = useRef(audioPlayer);
+    useEffect(() => { durationRef.current = duration; }, [duration]);
+    useEffect(() => { audioPlayerRef.current = audioPlayer; }, [audioPlayer]);
+    const panResponder = useRef(
+        PanResponder.create({
+            // Capture-phase flags so ScrollView never steals the gesture
+            onStartShouldSetPanResponder: () => true,
+            onStartShouldSetPanResponderCapture: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponderCapture: () => true,
+            onPanResponderGrant: (evt) => {
+                setIsSeeking(true);
+                const x = evt.nativeEvent.pageX - seekBarPageX.current;
+                const fraction = Math.min(Math.max(x / (seekBarWidth.current || 1), 0), 1);
+                setSeekPosition(fraction);
+            },
+            onPanResponderMove: (evt) => {
+                // Use pageX minus bar's absolute X for reliable position during drag
+                const x = evt.nativeEvent.pageX - seekBarPageX.current;
+                const fraction = Math.min(Math.max(x / (seekBarWidth.current || 1), 0), 1);
+                setSeekPosition(fraction);
+            },
+            onPanResponderRelease: (evt) => {
+                const x = evt.nativeEvent.pageX - seekBarPageX.current;
+                const fraction = Math.min(Math.max(x / (seekBarWidth.current || 1), 0), 1);
+                setSeekPosition(fraction);
+                setIsSeeking(false);
+                // Read from refs — not stale closure values
+                const dur = durationRef.current;
+                if (dur > 0) {
+                    audioPlayerRef.current.seekTo(fraction * dur);
+                }
+            },
+            onPanResponderTerminate: () => {
+                setIsSeeking(false);
+            },
+        })
+    ).current;
 
     const handleEdit = () => {
         setShowMenu(false);
@@ -147,6 +219,15 @@ export default function MemoryDetailScreen() {
 
     const fetchMemoryDetail = useCallback(async () => {
         if (!id) return;
+
+        // If we already have this memory in the store, use it immediately (no spinner)
+        const cached = useMemoryStore.getState().openedMemory;
+        if (cached && cached.id === id) {
+            setMemory(cached as ApiMemory);
+            setIsLoading(false);
+            return;
+        }
+
         setIsLoading(true);
         setError(null);
         try {
@@ -170,6 +251,8 @@ export default function MemoryDetailScreen() {
                 
                 if (isInnerSuccess && memoryObj) {
                     setMemory(memoryObj);
+                    // Cache in store for instant updates from edit screen
+                    setOpenedMemory(memoryObj as OpenedMemory);
                 } else {
                     const errorMsg = apiData.error?.message || apiData.message || 'Failed to retrieve memory details.';
                     console.warn('[MemoryDetail] Response indicates failure or missing memory:', response);
@@ -185,11 +268,13 @@ export default function MemoryDetailScreen() {
         } finally {
             setIsLoading(false);
         }
-    }, [id]);
+    }, [id, setOpenedMemory]);
 
     useEffect(() => {
         fetchMemoryDetail();
-    }, [fetchMemoryDetail]);
+        // Clear the cache when leaving this screen
+        return () => { clearOpenedMemory(); };
+    }, [fetchMemoryDetail, clearOpenedMemory]);
 
     const mediaUrl = useMemo(() => {
         if (!memory || !memory.files || memory.files.length === 0) return undefined;
@@ -322,20 +407,52 @@ export default function MemoryDetailScreen() {
                                 </Text>
                             </View>
                         </View>
-                        {/* Audio Waveform mock representation */}
-                        <View style={styles.waveformContainer}>
-                            {[30, 45, 20, 60, 40, 75, 50, 30, 65, 80, 40, 20, 50, 70, 45, 30, 60, 40, 20].map((h, i) => (
-                                <View 
-                                    key={i} 
+                        {/* Seek bar */}
+                        <View
+                            ref={seekBarRef}
+                            style={styles.seekTrackWrapper}
+                            onLayout={() => {
+                                seekBarRef.current?.measure((_x, _y, width, _h, pageX) => {
+                                    seekBarWidth.current = width;
+                                    seekBarPageX.current = pageX;
+                                });
+                            }}
+                            {...panResponder.panHandlers}
+                        >
+                            {/* Background track */}
+                            <View style={[styles.seekTrack, { backgroundColor: isDarkMode ? '#3A3A3A' : '#D0D0D0' }]}>
+                                {/* Filled portion */}
+                                <View
                                     style={[
-                                        styles.waveBar, 
-                                        { 
-                                            height: vs(h * 0.4), 
-                                            backgroundColor: isPlayingAudio && i < 10 ? colors.primaryAlt : (isDarkMode ? '#4A4A4A' : '#C0C0C0') 
+                                        styles.seekFill,
+                                        {
+                                            width: `${Math.min(progress * 100, 100)}%`,
+                                            backgroundColor: colors.primaryAlt,
                                         }
-                                    ]} 
+                                    ]}
                                 />
-                            ))}
+                                {/* Thumb */}
+                                <View
+                                    style={[
+                                        styles.seekThumb,
+                                        {
+                                            left: `${Math.min(progress * 100, 100)}%`,
+                                            backgroundColor: colors.primaryAlt,
+                                            transform: [{ translateX: -ms(8) }],
+                                        }
+                                    ]}
+                                />
+                            </View>
+                        </View>
+
+                        {/* Time labels */}
+                        <View style={styles.timeRow}>
+                            <Text style={[styles.timeText, { color: colors.textMuted }]}>
+                                {formatTime(currentTime)}
+                            </Text>
+                            <Text style={[styles.timeText, { color: colors.textMuted }]}>
+                                {formatTime(duration)}
+                            </Text>
                         </View>
                     </View>
                 ) : null}
@@ -522,17 +639,45 @@ const styles = StyleSheet.create({
         fontSize: ms(12),
         marginTop: vs(2),
     },
-    waveformContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+    seekTrackWrapper: {
         marginTop: vs(20),
-        height: vs(40),
-        paddingHorizontal: ms(10),
+        paddingVertical: vs(10), // Expand hit area vertically
+        justifyContent: 'center',
     },
-    waveBar: {
-        width: ms(4),
+    seekTrack: {
+        height: vs(4),
         borderRadius: ms(2),
+        width: '100%',
+        position: 'relative',
+        overflow: 'visible',
+    },
+    seekFill: {
+        height: '100%',
+        borderRadius: ms(2),
+        position: 'absolute',
+        left: 0,
+        top: 0,
+    },
+    seekThumb: {
+        position: 'absolute',
+        top: vs(-6),
+        width: ms(16),
+        height: ms(16),
+        borderRadius: ms(8),
+        elevation: 3,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.2,
+        shadowRadius: 2,
+    },
+    timeRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: vs(6),
+    },
+    timeText: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(11),
     },
     contentCard: {
         width: '100%',
