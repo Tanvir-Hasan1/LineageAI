@@ -1,11 +1,16 @@
 import { TimelineDataPoint, TimelineEntry } from '@/components/TimelineEntry';
 import { FONTS } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
-import { useRouter } from 'expo-router';
+import { useAuth } from '@/hooks/use-auth';
+import { api } from '@/services/api';
+import { resolveMediaUrl } from '@/utils/image';
 import { Feather } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
+    ActivityIndicator,
     Image,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
@@ -16,100 +21,177 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ms, vs } from 'react-native-size-matters';
 
-// Asset injection
-const IMAGES = {
-    lake: require('@/assets/images/dashboard/lake.png'),
-    wedding: require('@/assets/images/dashboard/wedding.png'),
-    coast: require('@/assets/images/dashboard/coast.png'),
-    birthday: require('@/assets/images/dashboard/birthday.png'),
+// ── Avatars ───────────────────────────────────────────────────────────────────
+const AVATARS = {
     margaret: require('@/assets/images/dashboard/margaret.png'),
-    robert: require('@/assets/images/dashboard/robert.png'),
+    robert:   require('@/assets/images/dashboard/robert.png'),
 };
 
-const DATA: TimelineDataPoint[] = [
-    {
-        id: '1',
-        year: '2001',
-        type: 'text',
-        title: "Dad's Recipe for Life",
-        author: 'Robert Mitchell',
-        date: 'December 12, 2001',
-        content: `"Work hard, rest often, love always. And never, ever rush a good meal." — Written in Robert's journal, found after he passed.`,
-        tags: ['#Journal', '#Wisdom', '#Legacy'],
-        bgColor: '#E5E4DF',
-        darkBgColor: '#242420',
-    },
-    {
-        id: '2',
-        year: '1994',
-        type: 'audio',
-        title: 'Mom Singing in the Kitchen',
-        author: 'Margaret Mitchell',
-        date: 'December 24, 1994',
-        bgColor: '#DFE6EE',
-        darkBgColor: '#252B35',
-    },
-    {
-        id: '3',
-        year: '1991',
-        type: 'image',
-        title: "Sarah's 7th Birthday",
-        author: 'Margaret Mitchell',
-        date: 'April 5, 1991',
-        image: IMAGES.birthday,
-        bgColor: '#E5E2EE',
-        darkBgColor: '#3E3D47', // The exact Purple Dark mode requested
-    },
-    {
-        id: '4',
-        year: '1986',
-        type: 'image',
-        title: 'Morning at the Oregon Coast',
-        author: 'Robert Mitchell',
-        date: 'July 2, 1983',
-        image: IMAGES.coast,
-        bgColor: '#E5E2EE',
-        darkBgColor: '#3E3D47',
-    },
-    {
-        id: '5',
-        year: '1978',
-        type: 'image',
-        title: 'Summer at Lake Geneva',
-        author: 'Margaret Mitchell',
-        date: 'August 14, 1978',
-        image: IMAGES.lake,
-        bgColor: '#E6E7DF',
-        darkBgColor: '#1C1C19', // The exact Sage Dark mode requested
-    },
-    {
-        id: '6',
-        year: '1967',
-        type: 'image',
-        title: "Margaret's Wedding Day",
-        author: 'Margaret Mitchell',
-        date: 'June 4, 1967',
-        image: IMAGES.wedding,
-        bgColor: '#E6E7DF',
-        darkBgColor: '#1C1C19',
-    },
+// ── Card colour palette (rotates by index) ────────────────────────────────────
+const CARD_PALETTES = [
+    { bgColor: '#E6E7DF', darkBgColor: '#1C1C19' },
+    { bgColor: '#E5E2EE', darkBgColor: '#3E3D47' },
+    { bgColor: '#DFE6EE', darkBgColor: '#252B35' },
+    { bgColor: '#E5E4DF', darkBgColor: '#242420' },
 ];
 
+// ── Map a raw API memory to a TimelineDataPoint ───────────────────────────────
+function mapMemory(mem: any, idx: number): TimelineDataPoint {
+    const palette = CARD_PALETTES[idx % CARD_PALETTES.length];
+    const dateObj  = new Date(mem.date || mem.createdAt || '');
+    const year     = isNaN(dateObj.getTime()) ? '—' : String(dateObj.getFullYear());
+    const friendly = isNaN(dateObj.getTime())
+        ? ''
+        : dateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+    // Determine media type
+    let type: TimelineDataPoint['type'] = 'text';
+    if (mem.type === 'photo') type = 'image';
+    else if (mem.type === 'video') type = 'image'; // show thumbnail
+    else if (mem.type === 'voice') type = 'audio';
+
+    // Resolve image URL for photo/video memories
+    const fileUrl = mem.files?.[0]?.url ? resolveMediaUrl(mem.files[0].url) : undefined;
+
+    return {
+        id:       mem.id,
+        memoryId: mem.id,
+        year,
+        type,
+        title:    mem.title || 'Untitled',
+        author:   mem.whoseMemoryIsThis || '',
+        date:     friendly,
+        content:  mem.narrative || undefined,
+        tags:     Array.isArray(mem.tags) && mem.tags.length ? mem.tags : undefined,
+        image:    type === 'image' && fileUrl ? { uri: fileUrl } : undefined,
+        ...palette,
+    };
+}
+
+// ── Filter chip type ──────────────────────────────────────────────────────────
+interface FilterChip {
+    id: string;          // 'mine' | userId
+    label: string;
+    userId?: string;     // undefined = own timeline
+    avatar?: any;
+}
+
 export default function TimelineScreen() {
-    const colors = useAppTheme();
+    const colors    = useAppTheme();
     const isDarkMode = useColorScheme() === 'dark';
-    const router = useRouter();
-    const [activeFilter, setActiveFilter] = useState('Yours');
+    const router    = useRouter();
+    const { user }  = useAuth();
+
+    // ── Filter chips built from family members ───────────────────────────────
+    const filterChips: FilterChip[] = [
+        { id: 'mine', label: 'Yours' },
+        ...(user?.familyMembers?.map((m: any) => ({
+            id:     m.userId,
+            label:  m.name,
+            userId: m.userId,
+            avatar: m.name?.toLowerCase().includes('robert') ? AVATARS.robert : AVATARS.margaret,
+        })) ?? []),
+    ];
+
+    const [activeChipId, setActiveChipId] = useState('mine');
+
+    // ── API state ─────────────────────────────────────────────────────────────
+    const [timelineItems, setTimelineItems] = useState<TimelineDataPoint[]>([]);
+    const [isLoading, setIsLoading]         = useState(true);
+    const [isRefreshing, setIsRefreshing]   = useState(false);
+    const [error, setError]                 = useState<string | null>(null);
+
+    // ── Fetch ─────────────────────────────────────────────────────────────────
+    const fetchTimeline = useCallback(async (chipId: string, showSpinner = true) => {
+        if (showSpinner) setIsLoading(true);
+        setError(null);
+        try {
+            const activeChip = filterChips.find(c => c.id === chipId);
+            const params     = activeChip?.userId ? `?familyMemberUserId=${activeChip.userId}` : '';
+            console.log(`[Timeline] GET /memory-vault/timeline${params}`);
+            const response = await api.get(`/memory-vault/timeline${params}`);
+            console.log('[Timeline] success:', response.success);
+
+            if (response.success) {
+                console.log('[Timeline] Raw API Response Data:', JSON.stringify(response.data, null, 2));
+                // Shape can be: { data: [{ date, memories }] } or { data: { timeline: [...] } }
+                let raw: any[] = [];
+                if (Array.isArray(response.data?.data)) {
+                    raw = response.data.data;
+                } else if (Array.isArray(response.data?.data?.timeline)) {
+                    raw = response.data.data.timeline;
+                } else if (Array.isArray(response.data?.timeline)) {
+                    raw = response.data.timeline;
+                } else if (Array.isArray(response.data)) {
+                    raw = response.data;
+                }
+
+                // Flatten all memories from all date buckets
+                const all: any[] = [];
+                raw.forEach((bucket: any) => {
+                    if (Array.isArray(bucket.memories)) all.push(...bucket.memories);
+                });
+
+                // Sort newest first, then map
+                all.sort((a, b) =>
+                    new Date(b.date || b.createdAt || 0).getTime() -
+                    new Date(a.date || a.createdAt || 0).getTime()
+                );
+
+                const mapped = all.map(mapMemory);
+                console.log('[Timeline] Mapped Timeline Items:', JSON.stringify(mapped, null, 2));
+                setTimelineItems(mapped);
+            } else {
+                console.warn('[Timeline] API response success is false:', response);
+                setError(response.message || 'Failed to load timeline.');
+            }
+        } catch (err: any) {
+            console.error('[Timeline] Error:', err);
+            setError(err?.message || 'A network error occurred.');
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id, user?.familyMembers]);
+
+    // Refetch whenever the screen comes into focus
+    useFocusEffect(
+        useCallback(() => {
+            fetchTimeline(activeChipId, false);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [activeChipId])
+    );
+
+    const handleChipPress = (chipId: string) => {
+        setActiveChipId(chipId);
+        fetchTimeline(chipId);
+    };
+
+    const onRefresh = () => {
+        setIsRefreshing(true);
+        fetchTimeline(activeChipId, false);
+    };
+
+    // ── Subtitle ──────────────────────────────────────────────────────────────
+    const subtitle = isLoading
+        ? 'Loading…'
+        : error
+        ? 'Could not load timeline'
+        : timelineItems.length === 0
+        ? 'No memories yet'
+        : `${timelineItems.length} memor${timelineItems.length === 1 ? 'y' : 'ies'} across time`;
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-            {/* Sticky Header */}
+
+            {/* Header */}
             <View style={styles.header}>
                 <View>
                     <Text style={[styles.title, { color: colors.textDark }]}>Life Timeline</Text>
-                    <Text style={[styles.subtitle, { color: colors.textMuted }]}>6 events across 6 years</Text>
+                    <Text style={[styles.subtitle, { color: colors.textMuted }]}>{subtitle}</Text>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={[styles.iconBtn, { borderColor: colors.border }]}
                     onPress={() => router.push('/notifications')}
                 >
@@ -117,76 +199,107 @@ export default function TimelineScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* Member Filtering Row */}
-            <View>
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.filterScroll}
-                >
-                    {['Yours', 'Margaret', 'Robert'].map((filter) => {
-                        const isActive = activeFilter === filter;
-                        return (
-                            <TouchableOpacity
-                                key={filter}
-                                onPress={() => setActiveFilter(filter)}
-                                style={[
-                                    styles.filterBtn,
-                                    {
-                                        backgroundColor: isActive ? colors.primaryAlt : colors.cardBg,
-                                        borderWidth: isActive ? 0 : 1,
-                                        borderColor: colors.border
-                                    }
-                                ]}
-                            >
-                                {filter !== 'Yours' && (
-                                    <Image
-                                        source={filter === 'Margaret' ? IMAGES.margaret : IMAGES.robert}
-                                        style={styles.filterAvatar}
-                                    />
-                                )}
-                                <Text style={[
-                                    styles.filterText,
-                                    { color: isActive ? '#FFFFFF' : colors.textMuted }
-                                ]}>
-                                    {filter}
-                                </Text>
-                            </TouchableOpacity>
-                        );
-                    })}
-                </ScrollView>
-            </View>
+            {/* Member filter chips */}
+            {filterChips.length > 1 && (
+                <View>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.filterScroll}
+                    >
+                        {filterChips.map(chip => {
+                            const isActive = activeChipId === chip.id;
+                            return (
+                                <TouchableOpacity
+                                    key={chip.id}
+                                    onPress={() => handleChipPress(chip.id)}
+                                    style={[
+                                        styles.filterBtn,
+                                        {
+                                            backgroundColor: isActive ? colors.primaryAlt : colors.cardBg,
+                                            borderWidth: isActive ? 0 : 1,
+                                            borderColor: colors.border,
+                                        }
+                                    ]}
+                                >
+                                    {chip.avatar && (
+                                        <Image source={chip.avatar} style={styles.filterAvatar} />
+                                    )}
+                                    <Text style={[
+                                        styles.filterText,
+                                        { color: isActive ? '#FFFFFF' : colors.textMuted }
+                                    ]}>
+                                        {chip.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
+            )}
 
-            {/* Timeline Container */}
+            {/* Timeline body */}
             <View style={styles.timelineWrapper}>
-                {/* The continuous running line */}
                 <View style={[styles.timelineAxis, { backgroundColor: isDarkMode ? '#3E403A' : '#C4D0C8' }]} />
 
-                <ScrollView
-                    showsVerticalScrollIndicator={false}
-                    contentContainerStyle={styles.contentPadding}
-                >
-                    {DATA.map((item, index) => (
-                        <TimelineEntry
-                            key={item.id}
-                            item={item}
-                            index={index}
-                            isDarkMode={isDarkMode}
-                            colors={colors}
-                        />
-                    ))}
-                    {/* Bottom spacing to guarantee not cutoff by the float tab bar */}
-                    <View style={{ height: vs(100) }} />
-                </ScrollView>
+                {isLoading ? (
+                    <View style={styles.centeredState}>
+                        <ActivityIndicator size="large" color={colors.primaryAlt} />
+                        <Text style={[styles.stateText, { color: colors.textMuted }]}>Loading timeline…</Text>
+                    </View>
+
+                ) : error ? (
+                    <View style={styles.centeredState}>
+                        <Feather name="alert-circle" size={ms(44)} color="#E88B8B" />
+                        <Text style={[styles.stateText, { color: colors.textDark, marginTop: vs(12) }]}>{error}</Text>
+                        <TouchableOpacity
+                            style={[styles.retryBtn, { backgroundColor: colors.primaryAlt }]}
+                            onPress={() => fetchTimeline(activeChipId)}
+                        >
+                            <Text style={styles.retryText}>Retry</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                ) : timelineItems.length === 0 ? (
+                    <View style={styles.centeredState}>
+                        <Feather name="clock" size={ms(44)} color={colors.textMuted} />
+                        <Text style={[styles.stateText, { color: colors.textDark, marginTop: vs(12) }]}>No memories yet</Text>
+                        <Text style={[styles.stateSubText, { color: colors.textMuted }]}>
+                            Add memories to see them appear on your timeline.
+                        </Text>
+                    </View>
+
+                ) : (
+                    <ScrollView
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={styles.contentPadding}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={isRefreshing}
+                                onRefresh={onRefresh}
+                                colors={[colors.primaryAlt]}
+                            />
+                        }
+                    >
+                        {timelineItems.map((item, index) => (
+                            <TimelineEntry
+                                key={item.id}
+                                item={item}
+                                index={index}
+                                isDarkMode={isDarkMode}
+                                colors={colors}
+                            />
+                        ))}
+                        <View style={{ height: vs(100) }} />
+                    </ScrollView>
+                )}
             </View>
         </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+    container: { flex: 1 },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -221,7 +334,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: ms(16),
-        paddingVertical: vs(2),
+        paddingVertical: vs(6),
         borderRadius: ms(20),
     },
     filterAvatar: {
@@ -249,5 +362,38 @@ const styles = StyleSheet.create({
     contentPadding: {
         paddingLeft: ms(45),
         paddingRight: ms(16),
+    },
+    centeredState: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: ms(32),
+        paddingBottom: vs(60),
+    },
+    stateText: {
+        fontFamily: FONTS.serif,
+        fontSize: ms(16),
+        fontWeight: '600',
+        textAlign: 'center',
+    },
+    stateSubText: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(13),
+        textAlign: 'center',
+        marginTop: vs(6),
+        lineHeight: vs(18),
+        opacity: 0.8,
+    },
+    retryBtn: {
+        marginTop: vs(16),
+        paddingHorizontal: ms(24),
+        paddingVertical: vs(10),
+        borderRadius: ms(12),
+    },
+    retryText: {
+        color: '#FFFFFF',
+        fontFamily: FONTS.sans,
+        fontWeight: '600',
+        fontSize: ms(14),
     },
 });

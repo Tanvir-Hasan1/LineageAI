@@ -57,7 +57,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       console.log('[AuthStore fetchProfile] API Response success:', response.success);
       if (response.success && response.data) {
         console.log('[AuthStore fetchProfile] Raw API data:', JSON.stringify(response.data, null, 2));
-        const userData = response.data.data?.user || response.data.user;
+        const userData = response.data.data?.user
+            || response.data.user
+            || (response.data?.id ? response.data : null)
+            || (response.data?.data?.id ? response.data.data : null); // actual shape: { success, data: { id, name, ... } }
         if (userData) {
           const nameParts = (userData.name || '').trim().split(/\s+/);
           const firstName = nameParts[0] || '';
@@ -143,7 +146,10 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       console.log('[AuthStore updateProfile] Response success:', response.success);
       if (response.success && response.data) {
         console.log('[AuthStore updateProfile] Response data:', JSON.stringify(response.data, null, 2));
-        const userData = response.data.data?.user || response.data.user;
+        const userData = response.data.data?.user
+            || response.data.user
+            || (response.data?.id ? response.data : null)
+            || (response.data?.data?.id ? response.data.data : null); // actual shape: { success, data: { id, name, ... } }
         if (userData) {
           const nameParts = (userData.name || '').trim().split(/\s+/);
           const firstName = nameParts[0] || '';
