@@ -7,12 +7,14 @@ import {
     ScrollView,
     useColorScheme 
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { ms, vs } from 'react-native-size-matters';
 import { FONTS } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
+import { api } from '@/services/api';
+import { PasswordModal } from '@/components/PasswordModal';
 
 interface TransferItem {
     id: string;
@@ -30,7 +32,15 @@ const ITEMS: TransferItem[] = [
 
 export default function DataTransferScreen() {
     const router = useRouter();
+    const { name, email, relation, inactivityDays } = useLocalSearchParams<{
+        name: string;
+        email: string;
+        relation: string;
+        inactivityDays: string;
+    }>();
     const isDarkMode = useColorScheme() === 'dark';
+
+    const [passwordModalVisible, setPasswordModalVisible] = useState(false);
 
     // Pre-select items according to user visual reference (all except AI)
     const [selectedIds, setSelectedIds] = useState<string[]>(['memories', 'narratives', 'profile', 'export']);
@@ -40,6 +50,43 @@ export default function DataTransferScreen() {
         setSelectedIds((prev) => 
             prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
         );
+    };
+
+    const handleSavePress = () => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        setPasswordModalVisible(true);
+    };
+
+    const handlePasswordConfirm = async (password: string) => {
+        console.log('[TrustedContacts] Creating new trusted contact on backend...');
+        
+        // Map selected IDs to the API's TrustedContactAccessScope shape
+        const accessScope = {
+            profile: selectedIds.includes('profile'),
+            documents: selectedIds.includes('memories'),
+            notes: selectedIds.includes('memories') || selectedIds.includes('narratives'),
+            messages: selectedIds.includes('ai'),
+            paymentInfo: false,
+            accountTransfer: selectedIds.includes('export'),
+        };
+
+        const response = await api.post('/trusted-contacts', {
+            name: name || '',
+            email: email || '',
+            inactivityDays: parseInt(inactivityDays || '90') || 90,
+            accessScope,
+            currentPassword: password
+        });
+
+        if (response.success) {
+            console.log('[TrustedContacts] Creation successful.');
+            setPasswordModalVisible(false);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            router.push('/legacy-mode/success');
+        } else {
+            console.warn('[TrustedContacts] Creation failed:', response.message);
+            throw new Error(response.message || 'Failed to create trusted contact. Please check your password.');
+        }
     };
 
     const palette = {
@@ -84,9 +131,9 @@ export default function DataTransferScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 
-                <Text style={[styles.pageTitle, { color: isDarkMode ? '#C5C9A8' : '#2D2C39' }]}>Legacy Mode</Text>
+                <Text style={[styles.pageTitle, { color: isDarkMode ? '#C5C9A8' : '#2D2C39' }]}>Trusted Contacts</Text>
                 <Text style={[styles.pageSubtitle, { color: isDarkMode ? '#8E8E93' : '#8A9981' }]}>
-                    Set up what happens to your archive after a period of inactivity.
+                    Set up who has trusted access to your archive after a period of inactivity.
                 </Text>
 
                 {/* Step 3 View: All 3 bars completely full! */}
@@ -104,7 +151,7 @@ export default function DataTransferScreen() {
                 </View>
 
                 <Text style={[styles.listHeading, { color: isDarkMode ? '#D5D2C1' : '#92A38D' }]}>
-                    Choose what data will be transferred to your trusted contacts when Legacy Mode activates.
+                    Choose what data will be transferred to your trusted contacts when legacy access activates.
                 </Text>
 
                 {/* Composite Selection Tree */}
@@ -151,14 +198,19 @@ export default function DataTransferScreen() {
                 <TouchableOpacity 
                     style={[styles.continueBtn, { backgroundColor: palette.btnPrimary }]}
                     activeOpacity={0.9}
-                    onPress={() => {
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); // Success Haptic logic
-                        router.push('/legacy-mode/success');
-                    }}
+                    onPress={handleSavePress}
                 >
-                    <Text style={styles.continueBtnText}>Activate Legacy Mode</Text>
+                    <Text style={styles.continueBtnText}>Save Trusted Contacts</Text>
                 </TouchableOpacity>
             </View>
+
+            <PasswordModal
+                visible={passwordModalVisible}
+                title="Confirm Password"
+                subtitle={`Please enter your current password to authorize adding ${name || 'your trusted contact'}.`}
+                onClose={() => setPasswordModalVisible(false)}
+                onConfirm={handlePasswordConfirm}
+            />
 
         </SafeAreaView>
     );

@@ -46,11 +46,11 @@ export default function LegacySuccessScreen() {
                 </View>
 
                 <Text style={[styles.title, { color: palette.title }]}>
-                    Legacy Mode{'\n'}is active.
+                    Trusted Contacts{'\n'}are configured.
                 </Text>
 
                 <Text style={[styles.subtitle, { color: palette.sub }]}>
-                    Your archive is now protected. After 1 year of inactivity, your trusted contacts will be notified according to your rules.
+                    Your trusted contacts are now set up. They will be notified according to your inactivity rules.
                 </Text>
 
                 <TouchableOpacity
@@ -58,9 +58,7 @@ export default function LegacySuccessScreen() {
                     activeOpacity={0.8}
                     onPress={handleFinish}
                 >
-                    <Text style={styles.btnText}>
-                        {isDarkMode ? "Return to Settings" : "Return to Family Access"}
-                    </Text>
+                    <Text style={styles.btnText}>Return to Settings</Text>
                 </TouchableOpacity>
 
             </View>

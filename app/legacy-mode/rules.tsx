@@ -7,7 +7,7 @@ import {
     ScrollView,
     useColorScheme 
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { ms, vs } from 'react-native-size-matters';
@@ -19,6 +19,7 @@ const VERIFICATION_METHODS = ['Email confirmation', 'Trusted contact vote', 'Leg
 
 export default function LegacyRulesScreen() {
     const router = useRouter();
+    const { name, email, relation } = useLocalSearchParams<{ name: string; email: string; relation: string }>();
     const isDarkMode = useColorScheme() === 'dark';
 
     // Interactive Selection States
@@ -75,9 +76,9 @@ export default function LegacyRulesScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
                 
-                <Text style={[styles.pageTitle, { color: isDarkMode ? '#D4DEC5' : '#2D2C39' }]}>Legacy Mode</Text>
+                <Text style={[styles.pageTitle, { color: isDarkMode ? '#D4DEC5' : '#2D2C39' }]}>Trusted Contacts</Text>
                 <Text style={[styles.pageSubtitle, { color: isDarkMode ? '#8E8E93' : '#8A9981' }]}>
-                    Set up what happens to your archive after a period of inactivity.
+                    Set up who has trusted access to your archive after a period of inactivity.
                 </Text>
 
                 {/* Step 2 View: First 2 bars active */}
@@ -94,10 +95,11 @@ export default function LegacyRulesScreen() {
                     </View>
                 </View>
 
+                {/* Inactivity period */}
                 <View style={styles.section}>
                     <Text style={[styles.sectionTitle, { color: isDarkMode ? '#FFFFFF' : '#3A3B3C' }]}>Inactivity period</Text>
                     <Text style={[styles.sectionHint, { color: isDarkMode ? '#A0A0A0' : '#8CA087' }]}>
-                        After this period of account inactivity, Legacy Mode will begin the handover process.
+                        After this period of account inactivity, legacy access will begin the handover process.
                     </Text>
 
                     <View style={styles.gridContainer}>
@@ -165,7 +167,16 @@ export default function LegacyRulesScreen() {
                     activeOpacity={0.9}
                     onPress={() => {
                         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        router.push('/legacy-mode/transfer');
+                        const inactivityDays = parseInt(selectedDays) || 90;
+                        router.push({
+                            pathname: '/legacy-mode/transfer',
+                            params: {
+                                name,
+                                email,
+                                relation,
+                                inactivityDays
+                            }
+                        });
                     }}
                 >
                     <Text style={styles.continueBtnText}>Continue</Text>

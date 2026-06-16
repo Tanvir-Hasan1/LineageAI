@@ -10,7 +10,8 @@ import {
     Switch,
     ActivityIndicator,
     Platform,
-    Appearance
+    Appearance,
+    Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,6 +23,8 @@ import { SignOutModal } from '@/components/SignOutModal';
 import { DeleteAccountModal } from '@/components/DeleteAccountModal';
 import { useAuth } from '@/hooks/use-auth';
 import { getAvatarSource } from '@/utils/image';
+import { PasswordModal } from '@/components/PasswordModal';
+import { api } from '@/services/api';
 
 export default function ProfileScreen() {
     const router = useRouter();
@@ -83,6 +86,40 @@ export default function ProfileScreen() {
     // Modal Interaction States
     const [showSignOut, setShowSignOut] = useState(false);
     const [showDelete, setShowDelete] = useState(false);
+    const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+    const [pendingLegacyAccessValue, setPendingLegacyAccessValue] = useState(false);
+    const [legacyAccessVal, setLegacyAccessVal] = useState(!!user?.legacyAccessEnabled);
+
+    useEffect(() => {
+        setLegacyAccessVal(!!user?.legacyAccessEnabled);
+    }, [user?.legacyAccessEnabled]);
+
+    const handleLegacyAccessToggle = (val: boolean) => {
+        setPendingLegacyAccessValue(val);
+        setPasswordModalVisible(true);
+    };
+
+    const handlePasswordConfirm = async (password: string) => {
+        console.log(`[Profile Settings] Patching legacy-access/settings to: ${pendingLegacyAccessValue}`);
+        const response = await api.patch('/legacy-access/settings', {
+            legacyAccessEnabled: pendingLegacyAccessValue,
+            currentPassword: password
+        });
+
+        if (response.success) {
+            console.log('[Profile Settings] Legacy mode settings updated successfully.');
+            // Sync status to global auth store
+            await updateUser({ legacyAccessEnabled: pendingLegacyAccessValue });
+            setPasswordModalVisible(false);
+            Alert.alert(
+                'Success', 
+                `Legacy mode has been ${pendingLegacyAccessValue ? 'enabled' : 'disabled'} successfully.`
+            );
+        } else {
+            console.warn('[Profile Settings] Patch failed:', response.message);
+            throw new Error(response.message || 'Verification failed. Please check your password.');
+        }
+    };
 
     // Synchronize local UI state with Native App Appearance engine immediately
     const toggleDarkMode = (val: boolean) => {
@@ -117,7 +154,7 @@ export default function ProfileScreen() {
     };
 
     // Row Builder Helper for clean mapping
-    const SettingsRow = ({ icon, label, subtext, groupType, showArrow = true, showSwitch = false, switchVal = false, setSwitchVal = null, isRed = false, onPress = null }: any) => {
+    const SettingsRow = ({ icon, label, subtext, groupType, showArrow = true, showSwitch = false, switchVal = false, setSwitchVal = null, isRed = false, onPress = null, isBlurred = false }: any) => {
         
         let iconBg = palette.iconBoxAccount;
         let iconColor = '#FFFFFF';
@@ -131,19 +168,26 @@ export default function ProfileScreen() {
             iconColor = isRed ? '#EF4444' : '#FFFFFF';
         }
 
+        const blurText = isBlurred ? {
+            color: 'transparent',
+            textShadowColor: isDarkMode ? 'rgba(255, 255, 255, 0.55)' : 'rgba(45, 44, 57, 0.55)',
+            textShadowOffset: { width: 0, height: 0 },
+            textShadowRadius: ms(4),
+        } : {};
+
         const content = (
             <View style={styles.rowContent}>
-                <View style={[styles.rowIconBox, { backgroundColor: iconBg }]}>
+                <View style={[styles.rowIconBox, { backgroundColor: iconBg }, isBlurred && { opacity: 0.3 }]}>
                     <Feather name={icon} size={ms(18)} color={iconColor} />
                 </View>
                 
                 <View style={styles.rowTextContainer}>
-                    <Text style={[styles.rowLabel, { color: isRed ? '#EE6B65' : palette.textDark }]}>{label}</Text>
-                    {subtext && <Text style={[styles.rowSubtext, { color: palette.textMuted }]}>{subtext}</Text>}
+                    <Text style={[styles.rowLabel, { color: isRed ? '#EE6B65' : palette.textDark }, blurText]}>{label}</Text>
+                    {subtext && <Text style={[styles.rowSubtext, { color: palette.textMuted }, blurText]}>{subtext}</Text>}
                 </View>
 
                 {showArrow && !showSwitch && (
-                    <Feather name="chevron-right" size={ms(18)} color={palette.textMuted} />
+                    <Feather name="chevron-right" size={ms(18)} color={palette.textMuted} style={isBlurred && { opacity: 0.3 }} />
                 )}
                 
                 {showSwitch && (
@@ -170,6 +214,7 @@ export default function ProfileScreen() {
             <TouchableOpacity 
                 style={styles.settingsRow} 
                 activeOpacity={0.6}
+                disabled={isBlurred}
                 onPress={() => {
                     if (onPress) {
                         onPress();
@@ -283,9 +328,31 @@ export default function ProfileScreen() {
                     <SettingsRow 
                         icon="shield" 
                         label="Legacy Mode" 
-                        subtext={user?.legacyAccessEnabled ? 'Enabled' : 'Disabled'}
+                        subtext={legacyAccessVal ? 'Legacy mode is active' : 'Enable legacy mode settings'}
+                        groupType="account" 
+                        showArrow={false}
+                        showSwitch={true}
+                        switchVal={legacyAccessVal}
+                        setSwitchVal={handleLegacyAccessToggle}
+                        isBlurred={false}
+                    />
+                    <View style={styles.divider} />
+                    <SettingsRow 
+                        icon="key" 
+                        label="Legacy Access" 
+                        subtext="Manage legacy access rules and settings"
+                        groupType="account" 
+                        onPress={() => { triggerHaptic(); router.push('/legacy-mode/rules'); }} 
+                        isBlurred={!legacyAccessVal}
+                    />
+                    <View style={styles.divider} />
+                    <SettingsRow 
+                        icon="user-check" 
+                        label="Trusted Contacts" 
+                        subtext="Manage trusted contacts"
                         groupType="account" 
                         onPress={() => { triggerHaptic(); router.push('/legacy-mode'); }} 
+                        isBlurred={!legacyAccessVal}
                     />
                 </View>
 
@@ -407,6 +474,17 @@ export default function ProfileScreen() {
                     // Irreversible action redirect
                     router.replace('/');
                 }}
+            />
+
+            <PasswordModal
+                visible={passwordModalVisible}
+                title={pendingLegacyAccessValue ? "Enable Legacy Mode?" : "Disable Legacy Mode?"}
+                subtitle={pendingLegacyAccessValue 
+                    ? "Please enter your password to authorize enabling legacy mode."
+                    : "Please enter your password to authorize disabling legacy mode."
+                }
+                onClose={() => setPasswordModalVisible(false)}
+                onConfirm={handlePasswordConfirm}
             />
 
         </SafeAreaView>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
     View, 
     Text, 
@@ -6,29 +6,126 @@ import {
     TouchableOpacity, 
     ScrollView,
     useColorScheme,
-    TextInput,
-    KeyboardAvoidingView,
-    Platform,
-    TouchableWithoutFeedback,
-    Keyboard
+    ActivityIndicator,
+    Alert,
+    RefreshControl
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { ms, vs } from 'react-native-size-matters';
 import { FONTS } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
+import { api } from '@/services/api';
+import { PasswordModal } from '@/components/PasswordModal';
 
-export default function TrustedContactsScreen() {
+interface TrustedContact {
+    id: string;
+    name: string;
+    email: string;
+    phone?: string;
+    status: 'pending' | 'accepted' | 'declined' | 'removed';
+    inactivityDays: number;
+    accessScope: {
+        profile: boolean;
+        documents: boolean;
+        notes: boolean;
+        messages: boolean;
+        paymentInfo: boolean;
+        accountTransfer: boolean;
+    };
+    createdAt: string;
+}
+
+export default function TrustedContactsListScreen() {
     const router = useRouter();
     const isDarkMode = useColorScheme() === 'dark';
 
-    // Local State for Ingestion Form
-    const [name, setName] = useState('');
-    const [email, setEmail] = useState('');
-    const [relation, setRelation] = useState('');
+    const [contacts, setContacts] = useState<TrustedContact[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    // Delete contact states
+    const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+    const [contactToDelete, setContactToDelete] = useState<TrustedContact | null>(null);
+
+    const fetchContacts = useCallback(async (showIndicator = true) => {
+        if (showIndicator) setLoading(true);
+        setError(null);
+        try {
+            console.log('[TrustedContacts] Fetching list...');
+            const response = await api.get('/trusted-contacts');
+            console.log('[TrustedContacts] List Response:', JSON.stringify(response));
+            
+            if (response.success && response.data) {
+                // Handle different API response structures safely
+                const list = response.data?.data || response.data || [];
+                setContacts(Array.isArray(list) ? list : []);
+            } else {
+                setError(response.message || 'Failed to retrieve trusted contacts.');
+            }
+        } catch (err: any) {
+            console.error('[TrustedContacts] Fetch error:', err);
+            setError(err?.message || 'A network error occurred.');
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    }, []);
+
+    // Refresh list on screen focus (e.g. returning from success screen)
+    useFocusEffect(
+        useCallback(() => {
+            fetchContacts(true);
+        }, [fetchContacts])
+    );
+
+    const onRefresh = useCallback(() => {
+        setRefreshing(true);
+        fetchContacts(false);
+    }, [fetchContacts]);
 
     const triggerHaptic = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const handleDeletePress = (contact: TrustedContact) => {
+        triggerHaptic();
+        setContactToDelete(contact);
+        setDeleteModalVisible(true);
+    };
+
+    const handleDeleteConfirm = async (password: string) => {
+        if (!contactToDelete) return;
+
+        console.log(`[TrustedContacts] Deleting contact id: ${contactToDelete.id}...`);
+        const response = await api.delete(`/trusted-contacts/${contactToDelete.id}`, {
+            body: JSON.stringify({ currentPassword: password }),
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (response.success) {
+            console.log('[TrustedContacts] Delete successful.');
+            setDeleteModalVisible(false);
+            setContactToDelete(null);
+            Alert.alert('Success', 'Trusted contact removed successfully.');
+            fetchContacts(false);
+        } else {
+            console.warn('[TrustedContacts] Delete failed:', response.message);
+            throw new Error(response.message || 'Failed to remove trusted contact. Please check your password.');
+        }
+    };
+
+    const getStatusStyles = (status: string) => {
+        switch (status) {
+            case 'accepted':
+                return { bg: isDarkMode ? '#233226' : '#E8F5E9', text: isDarkMode ? '#81C784' : '#2E7D32' };
+            case 'declined':
+                return { bg: isDarkMode ? '#3C2929' : '#FFEBEE', text: isDarkMode ? '#E57373' : '#C62828' };
+            case 'pending':
+            default:
+                return { bg: isDarkMode ? '#3E3424' : '#FFF3E0', text: isDarkMode ? '#FFB74D' : '#EF6C00' };
+        }
+    };
 
     const palette = {
         bg: isDarkMode ? '#121212' : '#F9F8F6',
@@ -38,131 +135,129 @@ export default function TrustedContactsScreen() {
         backBtnBg: isDarkMode ? '#323239' : '#E3E4E3',
         backBtnIcon: isDarkMode ? '#FFFFFF' : '#5A5B66',
 
-        trackActive: '#92A38D',
-        trackInactive: isDarkMode ? '#3A3A3A' : '#E8E8E8',
-
-        // Information Banner specifics
-        bannerBg: isDarkMode ? '#232B32' : '#E4EAEE',
-        bannerText: isDarkMode ? '#A0AEBB' : '#677685',
-
-        // Input Container Pod
-        formBg: isDarkMode ? '#2D2C35' : '#EAE9EF', // Soft lavender container seen in screenshot
-        inputBg: isDarkMode ? '#3D3D49' : '#D6D7DE', // Tinted input fields seen in screenshot
-        placeholder: isDarkMode ? '#8E8E9B' : '#7A7B85',
-
-        // Secondary Action Button
-        secondaryBtn: isDarkMode ? '#4D4C5D' : '#A2A1BA',
-        secondaryBtnText: '#FFFFFF',
+        // List item styling
+        itemBg: isDarkMode ? '#1E1E24' : '#EAE9EF',
+        itemBorder: isDarkMode ? '#3D3D49' : '#CDD8DF',
+        divider: isDarkMode ? '#2D2D35' : '#D6D5DB',
 
         btnPrimary: '#92A38D'
     };
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: palette.bg }]}>
-            <KeyboardAvoidingView 
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={{ flex: 1 }}
-            >
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                    <View style={{ flex: 1 }}>
-                        
-                        <View style={styles.header}>
+            
+            <View style={styles.header}>
                 <TouchableOpacity 
                     style={[styles.backBtn, { backgroundColor: palette.backBtnBg }]}
-                    onPress={() => router.back()}
+                    onPress={() => router.replace('/profile')}
                 >
                     <Feather name="arrow-left" size={ms(20)} color={palette.backBtnIcon} />
                 </TouchableOpacity>
+                <Text style={[styles.headerTitle, { color: palette.textDark }]}>Trusted Contacts</Text>
+                <View style={{ width: ms(36) }} />
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                
-                <Text style={[styles.pageTitle, { color: isDarkMode ? '#D4DEC5' : '#2D2C39' }]}>Legacy Mode</Text>
-                <Text style={[styles.pageSubtitle, { color: isDarkMode ? '#8E8E93' : '#8A9981' }]}>
-                    Set up what happens to your archive after a period of inactivity.
-                </Text>
-
-                {/* Step 1 View: Only first bar active */}
-                <View style={styles.stepperBlock}>
-                    <View style={styles.stepTracksRow}>
-                        <View style={[styles.track, { backgroundColor: palette.trackActive }]} />
-                        <View style={[styles.track, { backgroundColor: palette.trackInactive }]} />
-                        <View style={[styles.track, { backgroundColor: palette.trackInactive }]} />
-                    </View>
-                    <View style={styles.stepLabelsRow}>
-                        <Text style={[styles.stepLabel, { color: palette.trackActive }]}>Trusted Contacts</Text>
-                        <Text style={[styles.stepLabel, { color: isDarkMode ? '#555' : '#AFAFAF' }]}>Define Rules</Text>
-                        <Text style={[styles.stepLabel, { color: isDarkMode ? '#555' : '#AFAFAF' }]}>Data Transfer</Text>
-                    </View>
+            {loading ? (
+                <View style={styles.center}>
+                    <ActivityIndicator size="large" color={palette.btnPrimary} />
+                    <Text style={[styles.loadingText, { color: palette.textSub }]}>Loading trusted contacts...</Text>
                 </View>
-
-                {/* Info Banner Row */}
-                <View style={[styles.infoBanner, { backgroundColor: palette.bannerBg }]}>
-                    <Ionicons name="information-circle-outline" size={ms(18)} color={palette.bannerText} style={{ marginRight: ms(10), marginTop: vs(2) }} />
-                    <Text style={[styles.infoText, { color: palette.bannerText }]}>
-                        Trusted contacts are the people who will be notified and granted access to your archive when Legacy Mode activates.
-                    </Text>
-                </View>
-
-                {/* High Fidelity Input Pod */}
-                <View style={[styles.formContainer, { backgroundColor: palette.formBg }]}>
-                    <Text style={[styles.formTitle, { color: isDarkMode ? '#FFFFFF' : '#3A3B45' }]}>Add Trusted Contact</Text>
-
-                    <TextInput 
-                        style={[styles.input, { backgroundColor: palette.inputBg, color: palette.textDark }]}
-                        placeholder="Full name"
-                        placeholderTextColor={palette.placeholder}
-                        value={name}
-                        onChangeText={setName}
-                    />
-
-                    <TextInput 
-                        style={[styles.input, { backgroundColor: palette.inputBg, color: palette.textDark }]}
-                        placeholder="Email address"
-                        placeholderTextColor={palette.placeholder}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                        value={email}
-                        onChangeText={setEmail}
-                    />
-
-                    <TextInput 
-                        style={[styles.input, { backgroundColor: palette.inputBg, color: palette.textDark }]}
-                        placeholder="e.g. Sister, Son, Friend"
-                        placeholderTextColor={palette.placeholder}
-                        value={relation}
-                        onChangeText={setRelation}
-                    />
-
-                    {/* Secondary Button Inner */}
+            ) : error ? (
+                <View style={styles.center}>
+                    <Feather name="alert-circle" size={ms(48)} color="#E57373" />
+                    <Text style={[styles.errorText, { color: palette.textDark }]}>{error}</Text>
                     <TouchableOpacity 
-                        style={[styles.innerBtn, { backgroundColor: palette.secondaryBtn }]}
-                        activeOpacity={0.8}
-                        onPress={triggerHaptic}
+                        style={[styles.retryBtn, { backgroundColor: palette.btnPrimary }]}
+                        onPress={() => fetchContacts(true)}
                     >
-                        <Text style={[styles.innerBtnText, { color: palette.secondaryBtnText }]}>+ Add Contact</Text>
+                        <Text style={styles.retryText}>Retry</Text>
                     </TouchableOpacity>
                 </View>
-
-            </ScrollView>
-
+            ) : contacts.length === 0 ? (
+                <View style={styles.center}>
+                    <View style={[styles.emptyIconCirc, { backgroundColor: isDarkMode ? '#2A2E2A' : '#EBF0EA' }]}>
+                        <Feather name="users" size={ms(48)} color={palette.btnPrimary} />
                     </View>
-                </TouchableWithoutFeedback>
-            </KeyboardAvoidingView>
-
-            {/* Route Forward to Step 2 (Rules.tsx) - Fixed anchored to screen root */}
-            <View style={styles.footer}>
-                <TouchableOpacity 
-                    style={[styles.continueBtn, { backgroundColor: palette.btnPrimary }]}
-                    activeOpacity={0.9}
-                    onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        router.push('/legacy-mode/rules');
-                    }}
+                    <Text style={[styles.emptyTitle, { color: palette.textDark }]}>No Trusted Contacts</Text>
+                    <Text style={[styles.emptySubtitle, { color: palette.textSub }]}>
+                        Add trusted contacts who will be notified and granted access to your memories after a period of inactivity.
+                    </Text>
+                </View>
+            ) : (
+                <ScrollView 
+                    showsVerticalScrollIndicator={false} 
+                    contentContainerStyle={styles.scrollContent}
+                    refreshControl={
+                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[palette.btnPrimary]} />
+                    }
                 >
-                    <Text style={styles.continueBtnText}>Continue</Text>
-                </TouchableOpacity>
-            </View>
+                    <View style={styles.listContainer}>
+                        {contacts.map((contact) => {
+                            const badge = getStatusStyles(contact.status);
+                            return (
+                                <View key={contact.id} style={[styles.contactCard, { backgroundColor: palette.itemBg }]}>
+                                    <View style={styles.cardHeader}>
+                                        <View style={styles.nameStack}>
+                                            <Text style={[styles.contactName, { color: palette.textDark }]}>{contact.name}</Text>
+                                            <Text style={[styles.contactEmail, { color: palette.textSub }]}>{contact.email}</Text>
+                                        </View>
+                                        <TouchableOpacity 
+                                            style={styles.deleteBtn}
+                                            onPress={() => handleDeletePress(contact)}
+                                        >
+                                            <Feather name="trash-2" size={ms(18)} color="#E57373" />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    <View style={[styles.cardDivider, { backgroundColor: palette.divider }]} />
+
+                                    <View style={styles.cardDetails}>
+                                        <View style={styles.detailRow}>
+                                            <Text style={[styles.detailLabel, { color: palette.textSub }]}>Inactivity Limit:</Text>
+                                            <Text style={[styles.detailValue, { color: palette.textDark }]}>{contact.inactivityDays} Days</Text>
+                                        </View>
+                                        <View style={styles.detailRow}>
+                                            <Text style={[styles.detailLabel, { color: palette.textSub }]}>Status:</Text>
+                                            <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                                                <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                                                    {contact.status.charAt(0).toUpperCase() + contact.status.slice(1)}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </View>
+                            );
+                        })}
+                    </View>
+                </ScrollView>
+            )}
+
+            {/* Bottom Add Contact Button */}
+            {!loading && (
+                <View style={styles.footer}>
+                    <TouchableOpacity 
+                        style={[styles.addBtn, { backgroundColor: palette.btnPrimary }]}
+                        activeOpacity={0.9}
+                        onPress={() => {
+                            triggerHaptic();
+                            router.push('/legacy-mode/add');
+                        }}
+                    >
+                        <Text style={styles.addBtnText}>+ Add Trusted Contact</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+
+            <PasswordModal
+                visible={deleteModalVisible}
+                title="Remove Trusted Contact?"
+                subtitle={`Please enter your password to authorize removing ${contactToDelete?.name || 'this contact'} from your list.`}
+                onClose={() => {
+                    setDeleteModalVisible(false);
+                    setContactToDelete(null);
+                }}
+                onConfirm={handleDeleteConfirm}
+            />
 
         </SafeAreaView>
     );
@@ -173,6 +268,9 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         paddingHorizontal: ms(20),
         paddingTop: vs(10),
         marginBottom: vs(10),
@@ -184,92 +282,130 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
+    headerTitle: {
+        fontFamily: FONTS.serif,
+        fontSize: ms(20),
+        fontWeight: '600',
+    },
     scrollContent: {
         paddingHorizontal: ms(20),
-        paddingBottom: vs(100),
+        paddingBottom: vs(120),
     },
-    pageTitle: {
-        fontFamily: FONTS.serif,
-        fontSize: ms(32),
-        fontWeight: '500',
-        marginTop: vs(10),
-        marginBottom: vs(8),
-    },
-    pageSubtitle: {
-        fontFamily: FONTS.sans,
-        fontSize: ms(15),
-        lineHeight: vs(22),
-        marginBottom: vs(24),
-    },
-    stepperBlock: {
-        marginBottom: vs(30),
-    },
-    stepTracksRow: {
-        flexDirection: 'row',
-        gap: ms(10),
-        marginBottom: vs(8),
-    },
-    track: {
+    center: {
         flex: 1,
-        height: vs(5),
-        borderRadius: ms(2),
-    },
-    stepLabelsRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-    },
-    stepLabel: {
-        fontFamily: FONTS.sans,
-        fontSize: ms(10),
-        textAlign: 'center',
-        flex: 1,
-    },
-    infoBanner: {
-        width: '100%',
-        borderRadius: ms(16),
-        padding: ms(16),
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        marginBottom: vs(24),
-    },
-    infoText: {
-        flex: 1,
-        fontFamily: FONTS.sans,
-        fontSize: ms(13),
-        lineHeight: vs(18),
-    },
-    formContainer: {
-        width: '100%',
-        borderRadius: ms(22),
-        padding: ms(20),
-        gap: vs(12),
-    },
-    formTitle: {
-        fontFamily: FONTS.serif,
-        fontSize: ms(18),
-        fontWeight: '500',
-        marginBottom: vs(6),
-    },
-    input: {
-        width: '100%',
-        height: vs(46),
-        borderRadius: ms(14),
-        paddingHorizontal: ms(16),
-        fontFamily: FONTS.sans,
-        fontSize: ms(14),
-    },
-    innerBtn: {
-        width: '100%',
-        height: vs(46),
-        borderRadius: ms(14),
         justifyContent: 'center',
         alignItems: 'center',
-        marginTop: vs(4),
+        paddingHorizontal: ms(40),
     },
-    innerBtnText: {
-        fontFamily: FONTS.serif,
+    loadingText: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(14),
+        marginTop: vs(12),
+    },
+    errorText: {
+        fontFamily: FONTS.sans,
         fontSize: ms(15),
+        textAlign: 'center',
+        marginTop: vs(16),
+        marginBottom: vs(16),
+    },
+    retryBtn: {
+        paddingHorizontal: ms(20),
+        paddingVertical: vs(10),
+        borderRadius: ms(12),
+    },
+    retryText: {
+        color: '#FFFFFF',
+        fontFamily: FONTS.sans,
+        fontSize: ms(14),
+        fontWeight: '600',
+    },
+    emptyIconCirc: {
+        width: ms(100),
+        height: ms(100),
+        borderRadius: ms(50),
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: vs(24),
+    },
+    emptyTitle: {
+        fontFamily: FONTS.serif,
+        fontSize: ms(24),
         fontWeight: '500',
+        marginBottom: vs(12),
+    },
+    emptySubtitle: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(15),
+        textAlign: 'center',
+        lineHeight: vs(22),
+    },
+    listContainer: {
+        gap: vs(16),
+        marginTop: vs(10),
+    },
+    contactCard: {
+        borderRadius: ms(20),
+        padding: ms(18),
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+    },
+    nameStack: {
+        flex: 1,
+        marginRight: ms(12),
+    },
+    contactName: {
+        fontFamily: FONTS.serif,
+        fontSize: ms(18),
+        fontWeight: '600',
+        marginBottom: vs(2),
+    },
+    contactEmail: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(13),
+    },
+    deleteBtn: {
+        padding: ms(6),
+        marginLeft: ms(8),
+    },
+    cardDivider: {
+        height: 1,
+        marginVertical: vs(14),
+    },
+    cardDetails: {
+        gap: vs(8),
+    },
+    detailRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    detailLabel: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(13),
+    },
+    detailValue: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(14),
+        fontWeight: '500',
+    },
+    statusBadge: {
+        paddingHorizontal: ms(10),
+        paddingVertical: vs(4),
+        borderRadius: ms(10),
+    },
+    statusBadgeText: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(11),
+        fontWeight: '600',
     },
     footer: {
         position: 'absolute',
@@ -277,7 +413,7 @@ const styles = StyleSheet.create({
         left: ms(20),
         right: ms(20),
     },
-    continueBtn: {
+    addBtn: {
         width: '100%',
         height: vs(52),
         borderRadius: ms(14),
@@ -285,7 +421,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         elevation: 2,
     },
-    continueBtnText: {
+    addBtnText: {
         fontFamily: FONTS.serif,
         color: '#FFFFFF',
         fontSize: ms(16),
