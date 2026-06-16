@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import React, { useMemo, useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { getAvatarSource } from '@/utils/image';
+import { useNotificationStore } from '@/store/notification-store';
 import {
     ScrollView,
     StatusBar,
@@ -27,9 +28,11 @@ export default function DashboardScreen() {
     const router = useRouter();
     const { user, isProfilePictureLoading, setProfilePictureLoading } = useAuth();
     const [imageError, setImageError] = useState(false);
+    const { unreadCount, fetchUnreadCount } = useNotificationStore();
 
     useEffect(() => {
         setImageError(false);
+        fetchUnreadCount();
     }, [user?.profilePicture?.url]);
 
     const hasImage = !!(user?.profilePicture?.url || user?.avatarUrl) && !imageError;
@@ -99,7 +102,7 @@ export default function DashboardScreen() {
                             onPress={() => router.push('/notifications')}
                         >
                             <MaterialCommunityIcons name="bell-outline" size={26} color={colors.primaryAlt} />
-                            <View style={styles.notificationDot} />
+                            {unreadCount > 0 && <View style={styles.notificationDot} />}
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.avatarWrapper}
