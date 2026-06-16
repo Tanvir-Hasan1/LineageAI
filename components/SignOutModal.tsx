@@ -1,6 +1,5 @@
 import React from 'react';
 import { 
-    Modal, 
     View, 
     Text, 
     TouchableOpacity, 
@@ -44,15 +43,12 @@ export const SignOutModal: React.FC<SignOutModalProps> = ({
         onConfirm();
     };
 
+    if (!visible) return null;
+
     return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="fade"
-            onRequestClose={onClose}
-        >
-            <Pressable style={[styles.overlay, { backgroundColor: palette.overlay }]} onPress={onClose}>
-                <Pressable style={[styles.content, { backgroundColor: palette.contentBg }]}>
+        <View style={[StyleSheet.absoluteFill, { zIndex: 1000 }]}>
+            <Pressable style={[styles.overlay, { backgroundColor: palette.overlay }]} onPress={handleCancel}>
+                <Pressable style={[styles.content, { backgroundColor: palette.contentBg }]} onPress={(e) => e.stopPropagation()}>
                     
                     <Text style={[styles.title, { color: palette.textTitle }]}>Sign out?</Text>
                     
@@ -80,7 +76,7 @@ export const SignOutModal: React.FC<SignOutModalProps> = ({
 
                 </Pressable>
             </Pressable>
-        </Modal>
+        </View>
     );
 };
 

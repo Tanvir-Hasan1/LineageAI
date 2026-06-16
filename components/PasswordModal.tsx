@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    Modal, 
     View, 
     Text, 
     TouchableOpacity, 
@@ -80,18 +79,15 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({
         }
     };
 
+    if (!visible) return null;
+
     return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="fade"
-            onRequestClose={onClose}
-        >
+        <View style={[StyleSheet.absoluteFill, { zIndex: 1000 }]}>
             <KeyboardAvoidingView 
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
             >
-                <Pressable style={[styles.overlay, { backgroundColor: palette.overlay }]} onPress={onClose}>
+                <Pressable style={[styles.overlay, { backgroundColor: palette.overlay }]} onPress={handleCancel}>
                     <Pressable style={[styles.content, { backgroundColor: palette.contentBg }]} onPress={(e) => e.stopPropagation()}>
                         
                         <Text style={[styles.title, { color: palette.textTitle }]}>{title}</Text>
@@ -158,7 +154,7 @@ export const PasswordModal: React.FC<PasswordModalProps> = ({
                     </Pressable>
                 </Pressable>
             </KeyboardAvoidingView>
-        </Modal>
+        </View>
     );
 };
 

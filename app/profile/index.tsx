@@ -461,8 +461,12 @@ export default function ProfileScreen() {
                 onClose={() => setShowSignOut(false)}
                 onConfirm={async () => {
                     setShowSignOut(false);
-                    await signOut();
-                    router.replace('/auth/signin'); 
+                    // Navigate immediately after modal closing transition for instant feedback,
+                    // and handle session invalidation/cleanup in the background.
+                    setTimeout(() => {
+                        router.replace('/auth/signin');
+                        signOut();
+                    }, 400);
                 }}
             />
 
@@ -471,8 +475,10 @@ export default function ProfileScreen() {
                 onClose={() => setShowDelete(false)}
                 onConfirm={() => {
                     setShowDelete(false);
-                    // Irreversible action redirect
-                    router.replace('/');
+                    // Give the modal transition time to complete before changing route
+                    setTimeout(() => {
+                        router.replace('/');
+                    }, 400);
                 }}
             />
 

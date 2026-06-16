@@ -8,7 +8,8 @@ import {
     useColorScheme,
     ActivityIndicator,
     Alert,
-    RefreshControl
+    RefreshControl,
+    Image
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,8 +17,10 @@ import { Feather } from '@expo/vector-icons';
 import { ms, vs } from 'react-native-size-matters';
 import { FONTS } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { api } from '@/services/api';
 import { PasswordModal } from '@/components/PasswordModal';
+import { getAvatarSource } from '@/utils/image';
 
 interface TrustedContact {
     id: string;
@@ -35,6 +38,8 @@ interface TrustedContact {
         accountTransfer: boolean;
     };
     createdAt: string;
+    avatarUrl?: string;
+    profilePicture?: { url: string };
 }
 
 export default function TrustedContactsListScreen() {
@@ -50,6 +55,84 @@ export default function TrustedContactsListScreen() {
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
     const [contactToDelete, setContactToDelete] = useState<TrustedContact | null>(null);
 
+    // Segment & Invite flow states
+    const [activeTab, setActiveTab] = useState<'contacts' | 'invites'>('contacts');
+    const [invitations, setInvitations] = useState<any[]>([]);
+    const [invitationsLoading, setInvitationsLoading] = useState(false);
+    const [invitationsError, setInvitationsError] = useState<string | null>(null);
+    const [actioningId, setActioningId] = useState<string | null>(null);
+
+    const fetchInvitations = useCallback(async (showIndicator = true) => {
+        if (showIndicator) setInvitationsLoading(true);
+        setInvitationsError(null);
+        try {
+            console.log('[TrustedContacts] Fetching received invitations...');
+            const response = await api.get('/trusted-contacts/invitations');
+            console.log('[TrustedContacts] Invitations Response:', JSON.stringify(response));
+
+            if (response.success && response.data) {
+                const list = response.data?.data || response.data || [];
+                setInvitations(Array.isArray(list) ? list : []);
+            } else {
+                setInvitationsError(response.message || 'Failed to retrieve received invitations.');
+            }
+        } catch (err: any) {
+            console.error('[TrustedContacts] Fetch invitations error:', err);
+            setInvitationsError(err?.message || 'A network error occurred.');
+        } finally {
+            setInvitationsLoading(false);
+            setRefreshing(false);
+        }
+    }, []);
+
+    const handleAcceptInvite = async (id: string, inviterName: string) => {
+        triggerHaptic();
+        setActioningId(id);
+
+        try {
+            console.log(`[Invitation] Accepting in-app invitation id: ${id}...`);
+            const response = await api.post(`/trusted-contacts/invitations/${id}/accept`);
+            if (response.success) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Alert.alert(
+                    'Success',
+                    `You have accepted the invitation! You are now a trusted contact for ${inviterName}.`
+                );
+                fetchInvitations(false);
+                fetchContacts(false);
+            } else {
+                Alert.alert('Accept Failed', response.message || 'Failed to accept invitation.');
+            }
+        } catch (err: any) {
+            console.error('[Invitation] Accept error:', err);
+            Alert.alert('Error', err?.message || 'A network error occurred.');
+        } finally {
+            setActioningId(null);
+        }
+    };
+
+    const handleDeclineInvite = async (id: string) => {
+        triggerHaptic();
+        setActioningId(id);
+
+        try {
+            console.log(`[Invitation] Declining in-app invitation id: ${id}...`);
+            const response = await api.post(`/trusted-contacts/invitations/${id}/decline`);
+            if (response.success) {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                Alert.alert('Invitation Declined', 'You have declined the invitation.');
+                fetchInvitations(false);
+            } else {
+                Alert.alert('Decline Failed', response.message || 'Failed to decline invitation.');
+            }
+        } catch (err: any) {
+            console.error('[Invitation] Decline error:', err);
+            Alert.alert('Error', err?.message || 'A network error occurred.');
+        } finally {
+            setActioningId(null);
+        }
+    };
+
     const fetchContacts = useCallback(async (showIndicator = true) => {
         if (showIndicator) setLoading(true);
         setError(null);
@@ -59,7 +142,6 @@ export default function TrustedContactsListScreen() {
             console.log('[TrustedContacts] List Response:', JSON.stringify(response));
             
             if (response.success && response.data) {
-                // Handle different API response structures safely
                 const list = response.data?.data || response.data || [];
                 setContacts(Array.isArray(list) ? list : []);
             } else {
@@ -78,7 +160,8 @@ export default function TrustedContactsListScreen() {
     useFocusEffect(
         useCallback(() => {
             fetchContacts(true);
-        }, [fetchContacts])
+            fetchInvitations(true);
+        }, [fetchContacts, fetchInvitations])
     );
 
     const onRefresh = useCallback(() => {
@@ -157,96 +240,256 @@ export default function TrustedContactsListScreen() {
                 <View style={{ width: ms(36) }} />
             </View>
 
-            {loading ? (
-                <View style={styles.center}>
-                    <ActivityIndicator size="large" color={palette.btnPrimary} />
-                    <Text style={[styles.loadingText, { color: palette.textSub }]}>Loading trusted contacts...</Text>
-                </View>
-            ) : error ? (
-                <View style={styles.center}>
-                    <Feather name="alert-circle" size={ms(48)} color="#E57373" />
-                    <Text style={[styles.errorText, { color: palette.textDark }]}>{error}</Text>
-                    <TouchableOpacity 
-                        style={[styles.retryBtn, { backgroundColor: palette.btnPrimary }]}
-                        onPress={() => fetchContacts(true)}
-                    >
-                        <Text style={styles.retryText}>Retry</Text>
-                    </TouchableOpacity>
-                </View>
-            ) : contacts.length === 0 ? (
-                <View style={styles.center}>
-                    <View style={[styles.emptyIconCirc, { backgroundColor: isDarkMode ? '#2A2E2A' : '#EBF0EA' }]}>
-                        <Feather name="users" size={ms(48)} color={palette.btnPrimary} />
-                    </View>
-                    <Text style={[styles.emptyTitle, { color: palette.textDark }]}>No Trusted Contacts</Text>
-                    <Text style={[styles.emptySubtitle, { color: palette.textSub }]}>
-                        Add trusted contacts who will be notified and granted access to your memories after a period of inactivity.
-                    </Text>
-                </View>
-            ) : (
-                <ScrollView 
-                    showsVerticalScrollIndicator={false} 
-                    contentContainerStyle={styles.scrollContent}
-                    refreshControl={
-                        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[palette.btnPrimary]} />
-                    }
+            {/* Custom Segmented Control */}
+            <View style={[styles.segmentContainer, { backgroundColor: isDarkMode ? '#1E1E24' : '#EAE9EF' }]}>
+                <TouchableOpacity 
+                    style={[styles.segmentButton, activeTab === 'contacts' && [styles.segmentButtonActive, { backgroundColor: isDarkMode ? '#2D2C39' : '#FFFFFF' }]]}
+                    onPress={() => { triggerHaptic(); setActiveTab('contacts'); }}
+                    activeOpacity={0.8}
                 >
-                    <View style={styles.listContainer}>
-                        {contacts.map((contact) => {
-                            const badge = getStatusStyles(contact.status);
-                            return (
-                                <View key={contact.id} style={[styles.contactCard, { backgroundColor: palette.itemBg }]}>
-                                    <View style={styles.cardHeader}>
-                                        <View style={styles.nameStack}>
-                                            <Text style={[styles.contactName, { color: palette.textDark }]}>{contact.name}</Text>
-                                            <Text style={[styles.contactEmail, { color: palette.textSub }]}>{contact.email}</Text>
-                                        </View>
-                                        <TouchableOpacity 
-                                            style={styles.deleteBtn}
-                                            onPress={() => handleDeletePress(contact)}
-                                        >
-                                            <Feather name="trash-2" size={ms(18)} color="#E57373" />
-                                        </TouchableOpacity>
-                                    </View>
+                    <Text style={[styles.segmentText, activeTab === 'contacts' ? { color: palette.textDark, fontWeight: '600' } : { color: palette.textSub }]}>My Contacts</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                    style={[styles.segmentButton, activeTab === 'invites' && [styles.segmentButtonActive, { backgroundColor: isDarkMode ? '#2D2C39' : '#FFFFFF' }]]}
+                    onPress={() => { triggerHaptic(); setActiveTab('invites'); }}
+                    activeOpacity={0.8}
+                >
+                    <Text style={[styles.segmentText, activeTab === 'invites' ? { color: palette.textDark, fontWeight: '600' } : { color: palette.textSub }]}>Received Invites</Text>
+                </TouchableOpacity>
+            </View>
 
-                                    <View style={[styles.cardDivider, { backgroundColor: palette.divider }]} />
-
-                                    <View style={styles.cardDetails}>
-                                        <View style={styles.detailRow}>
-                                            <Text style={[styles.detailLabel, { color: palette.textSub }]}>Inactivity Limit:</Text>
-                                            <Text style={[styles.detailValue, { color: palette.textDark }]}>{contact.inactivityDays} Days</Text>
-                                        </View>
-                                        <View style={styles.detailRow}>
-                                            <Text style={[styles.detailLabel, { color: palette.textSub }]}>Status:</Text>
-                                            <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                                                <Text style={[styles.statusBadgeText, { color: badge.text }]}>
-                                                    {contact.status.charAt(0).toUpperCase() + contact.status.slice(1)}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                    </View>
+            <Animated.View 
+                key={activeTab}
+                entering={FadeIn.duration(300)}
+                style={{ flex: 1 }}
+            >
+                {activeTab === 'contacts' ? (
+                    <>
+                        {loading ? (
+                            <View style={styles.center}>
+                                <ActivityIndicator size="large" color={palette.btnPrimary} />
+                                <Text style={[styles.loadingText, { color: palette.textSub }]}>Loading trusted contacts...</Text>
+                            </View>
+                        ) : error ? (
+                            <View style={styles.center}>
+                                <Feather name="alert-circle" size={ms(48)} color="#E57373" />
+                                <Text style={[styles.errorText, { color: palette.textDark }]}>{error}</Text>
+                                <TouchableOpacity 
+                                    style={[styles.retryBtn, { backgroundColor: palette.btnPrimary }]}
+                                    onPress={() => fetchContacts(true)}
+                                >
+                                    <Text style={styles.retryText}>Retry</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : contacts.length === 0 ? (
+                            <View style={styles.center}>
+                                <View style={[styles.emptyIconCirc, { backgroundColor: isDarkMode ? '#2A2E2A' : '#EBF0EA' }]}>
+                                    <Feather name="users" size={ms(48)} color={palette.btnPrimary} />
                                 </View>
-                            );
-                        })}
-                    </View>
-                </ScrollView>
-            )}
+                                <Text style={[styles.emptyTitle, { color: palette.textDark }]}>No Trusted Contacts</Text>
+                                <Text style={[styles.emptySubtitle, { color: palette.textSub }]}>
+                                    Add trusted contacts who will be notified and granted access to your memories after a period of inactivity.
+                                </Text>
+                            </View>
+                        ) : (
+                            <ScrollView 
+                                showsVerticalScrollIndicator={false} 
+                                contentContainerStyle={styles.scrollContent}
+                                refreshControl={
+                                    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[palette.btnPrimary]} />
+                                }
+                            >
+                                <View style={styles.listContainer}>
+                                    {contacts.map((contact) => {
+                                        const badge = getStatusStyles(contact.status);
+                                        return (
+                                            <View key={contact.id} style={[styles.contactCard, { backgroundColor: palette.itemBg }]}>
+                                                <View style={styles.cardHeader}>
+                                                    <Image 
+                                                        source={getAvatarSource(contact as any)} 
+                                                        style={styles.inviterAvatar}
+                                                    />
+                                                    <View style={styles.nameStack}>
+                                                        <Text style={[styles.contactName, { color: palette.textDark }]}>{contact.name}</Text>
+                                                        <Text style={[styles.contactEmail, { color: palette.textSub }]}>{contact.email}</Text>
+                                                    </View>
+                                                    <TouchableOpacity 
+                                                        style={styles.deleteBtn}
+                                                        onPress={() => handleDeletePress(contact)}
+                                                    >
+                                                        <Feather name="trash-2" size={ms(18)} color="#E57373" />
+                                                    </TouchableOpacity>
+                                                </View>
 
-            {/* Bottom Add Contact Button */}
-            {!loading && (
-                <View style={styles.footer}>
-                    <TouchableOpacity 
-                        style={[styles.addBtn, { backgroundColor: palette.btnPrimary }]}
-                        activeOpacity={0.9}
-                        onPress={() => {
-                            triggerHaptic();
-                            router.push('/legacy-mode/add');
-                        }}
-                    >
-                        <Text style={styles.addBtnText}>+ Add Trusted Contact</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
+                                                <View style={[styles.cardDivider, { backgroundColor: palette.divider }]} />
+
+                                                <View style={styles.cardDetails}>
+                                                    <View style={styles.detailRow}>
+                                                        <Text style={[styles.detailLabel, { color: palette.textSub }]}>Inactivity Limit:</Text>
+                                                        <Text style={[styles.detailValue, { color: palette.textDark }]}>{contact.inactivityDays} Days</Text>
+                                                    </View>
+                                                    <View style={styles.detailRow}>
+                                                        <Text style={[styles.detailLabel, { color: palette.textSub }]}>Status:</Text>
+                                                        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                                                            <Text style={[styles.statusBadgeText, { color: badge.text }]}>
+                                                                {contact.status.charAt(0).toUpperCase() + contact.status.slice(1)}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+                                                </View>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            </ScrollView>
+                        )}
+
+                        {/* Bottom Add Contact Button */}
+                        {!loading && (
+                            <View style={styles.footer}>
+                                <TouchableOpacity 
+                                    style={[styles.addBtn, { backgroundColor: palette.btnPrimary }]}
+                                    activeOpacity={0.9}
+                                    onPress={() => {
+                                        triggerHaptic();
+                                        router.push('/legacy-mode/add');
+                                    }}
+                                >
+                                    <Text style={styles.addBtnText}>+ Add Trusted Contact</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                    </>
+                ) : (
+                    <>
+                        {invitationsLoading ? (
+                            <View style={styles.center}>
+                                <ActivityIndicator size="large" color={palette.btnPrimary} />
+                                <Text style={[styles.loadingText, { color: palette.textSub }]}>Loading invitations...</Text>
+                            </View>
+                        ) : invitationsError ? (
+                            <View style={styles.center}>
+                                <Feather name="alert-circle" size={ms(48)} color="#E57373" />
+                                <Text style={[styles.errorText, { color: palette.textDark }]}>{invitationsError}</Text>
+                                <TouchableOpacity 
+                                    style={[styles.retryBtn, { backgroundColor: palette.btnPrimary }]}
+                                    onPress={() => fetchInvitations(true)}
+                                >
+                                    <Text style={styles.retryText}>Retry</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : invitations.length === 0 ? (
+                            <View style={styles.center}>
+                                <View style={[styles.emptyIconCirc, { backgroundColor: isDarkMode ? '#2A2E2A' : '#EBF0EA' }]}>
+                                    <Feather name="mail" size={ms(48)} color={palette.btnPrimary} />
+                                </View>
+                                <Text style={[styles.emptyTitle, { color: palette.textDark }]}>No Pending Invitations</Text>
+                                <Text style={[styles.emptySubtitle, { color: palette.textSub }]}>
+                                    Any invitations sent to you by others will appear here.
+                                </Text>
+                            </View>
+                        ) : (
+                            <ScrollView 
+                                showsVerticalScrollIndicator={false} 
+                                contentContainerStyle={styles.scrollContent}
+                                refreshControl={
+                                    <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchInvitations(false); }} colors={[palette.btnPrimary]} />
+                                }
+                            >
+                                <View style={styles.listContainer}>
+                                    {invitations.map((invite) => {
+                                        const ownerObj = invite.owner || invite.inviter || invite;
+                                        const inviterName = ownerObj?.name || invite.inviterName || 'Owner Name';
+                                        const inviterEmail = ownerObj?.email || invite.inviterEmail || 'Owner Email';
+                                        const isActioning = actioningId === invite.id;
+                                        
+                                        return (
+                                            <View key={invite.id} style={[styles.validatedCard, { backgroundColor: palette.itemBg }]}>
+                                                <View style={styles.cardHeader}>
+                                                    <Image 
+                                                        source={getAvatarSource(ownerObj as any)} 
+                                                        style={styles.inviterAvatar}
+                                                    />
+                                                    <View style={styles.nameStack}>
+                                                        <Text style={[styles.contactName, { color: palette.textDark }]}>
+                                                            {inviterName}
+                                                        </Text>
+                                                        <Text style={[styles.contactEmail, { color: palette.textSub }]}>
+                                                            {inviterEmail}
+                                                        </Text>
+                                                    </View>
+                                                    <View style={[styles.inviteBadge, { backgroundColor: isDarkMode ? '#3E3424' : '#FFF3E0' }]}>
+                                                        <Text style={[styles.inviteBadgeText, { color: isDarkMode ? '#FFB74D' : '#EF6C00' }]}>Pending</Text>
+                                                    </View>
+                                                </View>
+
+                                                <View style={[styles.cardDivider, { backgroundColor: palette.divider }]} />
+
+                                                <View style={styles.cardDetails}>
+                                                    <View style={styles.detailRow}>
+                                                        <Text style={[styles.detailLabel, { color: palette.textSub }]}>Inactivity Period:</Text>
+                                                        <Text style={[styles.detailValue, { color: palette.textDark }]}>
+                                                            {invite.inactivityDays || 90} Days
+                                                        </Text>
+                                                    </View>
+                                                    
+                                                    <Text style={[styles.scopesLabel, { color: palette.textDark }]}>Access Scopes Granted:</Text>
+                                                    <View style={styles.scopesList}>
+                                                        {Object.entries(invite.accessScope || {
+                                                            profile: true,
+                                                            documents: true,
+                                                            notes: true,
+                                                            messages: true
+                                                        }).map(([scopeKey, hasAccess]) => {
+                                                            if (!hasAccess) return null;
+                                                            let label = scopeKey.charAt(0).toUpperCase() + scopeKey.slice(1);
+                                                            if (scopeKey === 'documents') label = 'Memories';
+                                                            if (scopeKey === 'notes') label = 'Narratives';
+                                                            if (scopeKey === 'messages') label = 'AI Insights';
+                                                            return (
+                                                                <View key={scopeKey} style={styles.scopeBadge}>
+                                                                    <Feather name="check" size={ms(12)} color={palette.btnPrimary} style={{ marginRight: ms(4) }} />
+                                                                    <Text style={[styles.scopeBadgeText, { color: palette.textDark }]}>{label}</Text>
+                                                                </View>
+                                                            );
+                                                        })}
+                                                    </View>
+                                                </View>
+
+                                                <View style={[styles.cardDivider, { backgroundColor: palette.divider }]} />
+
+                                                <View style={styles.cardActions}>
+                                                    <TouchableOpacity
+                                                        style={[styles.actionBtn, styles.declineActionBtn, { borderColor: palette.itemBorder }]}
+                                                        onPress={() => handleDeclineInvite(invite.id)}
+                                                        disabled={isActioning}
+                                                        activeOpacity={0.8}
+                                                    >
+                                                        <Text style={[styles.actionBtnText, { color: '#E57373' }]}>Decline</Text>
+                                                    </TouchableOpacity>
+
+                                                    <TouchableOpacity
+                                                        style={[styles.actionBtn, styles.acceptActionBtn, { backgroundColor: palette.btnPrimary }]}
+                                                        onPress={() => handleAcceptInvite(invite.id, inviterName)}
+                                                        disabled={isActioning}
+                                                        activeOpacity={0.8}
+                                                    >
+                                                        {isActioning ? (
+                                                            <ActivityIndicator size="small" color="#FFFFFF" />
+                                                        ) : (
+                                                            <Text style={[styles.actionBtnText, { color: '#FFFFFF' }]}>Accept</Text>
+                                                        )}
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            </ScrollView>
+                        )}
+                    </>
+                )}
+            </Animated.View>
 
             <PasswordModal
                 visible={deleteModalVisible}
@@ -356,7 +599,13 @@ const styles = StyleSheet.create({
     cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
+        alignItems: 'center',
+    },
+    inviterAvatar: {
+        width: ms(40),
+        height: ms(40),
+        borderRadius: ms(20),
+        marginRight: ms(12),
     },
     nameStack: {
         flex: 1,
@@ -425,6 +674,151 @@ const styles = StyleSheet.create({
         fontFamily: FONTS.serif,
         color: '#FFFFFF',
         fontSize: ms(16),
+        fontWeight: '600',
+    },
+    segmentContainer: {
+        flexDirection: 'row',
+        marginHorizontal: ms(20),
+        marginBottom: vs(16),
+        borderRadius: ms(12),
+        padding: ms(3),
+        height: vs(44),
+    },
+    segmentButton: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: ms(9),
+    },
+    segmentButtonActive: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 3,
+        elevation: 2,
+    },
+    segmentText: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(14),
+    },
+    inviteSearchCard: {
+        borderRadius: ms(20),
+        padding: ms(18),
+        marginBottom: vs(16),
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+    },
+    inviteSearchTitle: {
+        fontFamily: FONTS.serif,
+        fontSize: ms(18),
+        fontWeight: '600',
+        marginBottom: vs(4),
+    },
+    inviteSearchSub: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(13),
+        lineHeight: vs(18),
+        marginBottom: vs(16),
+    },
+    inviteInput: {
+        height: vs(46),
+        borderRadius: ms(12),
+        borderWidth: 1,
+        paddingHorizontal: ms(14),
+        fontFamily: FONTS.sans,
+        fontSize: ms(14),
+        marginBottom: vs(12),
+    },
+    inviteErrorText: {
+        fontFamily: FONTS.sans,
+        color: '#E57373',
+        fontSize: ms(13),
+        marginBottom: vs(12),
+        fontWeight: '600',
+    },
+    validateBtn: {
+        height: vs(46),
+        borderRadius: ms(12),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    validateBtnText: {
+        fontFamily: FONTS.serif,
+        color: '#FFFFFF',
+        fontSize: ms(15),
+        fontWeight: '600',
+    },
+    validatedCard: {
+        borderRadius: ms(20),
+        padding: ms(18),
+        marginBottom: vs(16),
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 3,
+    },
+    inviteBadge: {
+        paddingHorizontal: ms(8),
+        paddingVertical: vs(3),
+        borderRadius: ms(8),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    inviteBadgeText: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(11),
+        fontWeight: '600',
+    },
+    scopesLabel: {
+        fontFamily: FONTS.serif,
+        fontSize: ms(15),
+        fontWeight: '600',
+        marginTop: vs(12),
+        marginBottom: vs(8),
+    },
+    scopesList: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: ms(8),
+    },
+    scopeBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: ms(10),
+        paddingVertical: vs(5),
+        borderRadius: ms(10),
+        backgroundColor: 'rgba(146, 163, 141, 0.1)',
+    },
+    scopeBadgeText: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(12),
+        fontWeight: '500',
+    },
+    cardActions: {
+        flexDirection: 'row',
+        gap: ms(12),
+        marginTop: vs(14),
+    },
+    actionBtn: {
+        flex: 1,
+        height: vs(44),
+        borderRadius: ms(12),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    declineActionBtn: {
+        borderWidth: 1,
+    },
+    acceptActionBtn: {
+        elevation: 1,
+    },
+    actionBtnText: {
+        fontFamily: FONTS.serif,
+        fontSize: ms(14),
         fontWeight: '600',
     }
 });

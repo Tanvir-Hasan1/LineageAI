@@ -15,7 +15,6 @@ import { FONTS } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
 
 const INACTIVITY_OPTIONS = ['30 Days', '60 Days', '90 Days', '120 Days'];
-const VERIFICATION_METHODS = ['Email confirmation', 'Trusted contact vote', 'Legal document', 'Multi-factor'];
 
 export default function LegacyRulesScreen() {
     const router = useRouter();
@@ -24,7 +23,6 @@ export default function LegacyRulesScreen() {
 
     // Interactive Selection States
     const [selectedDays, setSelectedDays] = useState('90 Days');
-    const [selectedMethod, setSelectedMethod] = useState('Email confirmation');
 
     const triggerHaptic = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -127,37 +125,7 @@ export default function LegacyRulesScreen() {
                     </View>
                 </View>
 
-                <View style={styles.section}>
-                    <Text style={[styles.sectionTitle, { color: isDarkMode ? '#FFFFFF' : '#3A3B3C', marginTop: vs(10) }]}>Verification method</Text>
 
-                    <View style={styles.listContainer}>
-                        {VERIFICATION_METHODS.map((method) => {
-                            const isActive = selectedMethod === method;
-                            return (
-                                <TouchableOpacity
-                                    key={method}
-                                    style={[
-                                        styles.listItem,
-                                        { backgroundColor: isActive ? palette.listActiveBg : palette.listBg },
-                                        isActive && { borderWidth: 1, borderColor: palette.listActiveBorder }
-                                    ]}
-                                    activeOpacity={0.8}
-                                    onPress={() => handleSelection(setSelectedMethod, method)}
-                                >
-                                    <Text style={[
-                                        styles.listItemText,
-                                        { color: isActive ? palette.listTextActive : palette.listText }
-                                    ]}>
-                                        {method}
-                                    </Text>
-                                    {isActive && (
-                                        <Feather name="check" size={ms(16)} color="#FFFFFF" />
-                                    )}
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
-                </View>
 
             </ScrollView>
 

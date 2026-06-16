@@ -127,6 +127,14 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   signOut: async () => {
     try {
+      console.log('[AuthStore] Inactivating tokens by calling backend /auth/logout...');
+      const { api } = require('@/services/api');
+      await api.post('/auth/logout');
+    } catch (apiErr) {
+      console.warn('[AuthStore] Backend logout request failed:', apiErr);
+    }
+
+    try {
       await SecureStorageService.removeItem('authToken');
       await SecureStorageService.removeItem('refreshToken');
       await SecureStorageService.removeItem('authUser');
@@ -139,6 +147,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         isLoading: false,
         familyMembers: [],
       });
+      console.log('[AuthStore] Locally cleared auth credentials.');
     } catch (error) {
       console.error('Sign-out failed:', error);
     }

@@ -1,6 +1,5 @@
 import React from 'react';
 import { 
-    Modal, 
     View, 
     Text, 
     TouchableOpacity, 
@@ -58,15 +57,12 @@ export const DeleteAccountModal: React.FC<DeleteAccountModalProps> = ({
         onConfirm();
     };
 
+    if (!visible) return null;
+
     return (
-        <Modal
-            transparent
-            visible={visible}
-            animationType="fade"
-            onRequestClose={onClose}
-        >
-            <Pressable style={[styles.overlay, { backgroundColor: palette.overlay }]} onPress={onClose}>
-                <Pressable style={[styles.content, { backgroundColor: palette.contentBg }]}>
+        <View style={[StyleSheet.absoluteFill, { zIndex: 1000 }]}>
+            <Pressable style={[styles.overlay, { backgroundColor: palette.overlay }]} onPress={handleClose}>
+                <Pressable style={[styles.content, { backgroundColor: palette.contentBg }]} onPress={(e) => e.stopPropagation()}>
                     
                     {/* Top Utilities Row */}
                     <View style={styles.headerRow}>
@@ -106,7 +102,7 @@ export const DeleteAccountModal: React.FC<DeleteAccountModalProps> = ({
 
                 </Pressable>
             </Pressable>
-        </Modal>
+        </View>
     );
 };
 

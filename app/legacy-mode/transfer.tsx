@@ -27,7 +27,6 @@ const ITEMS: TransferItem[] = [
     { id: 'narratives', title: 'Written narratives', subtitle: 'Notes, journals, biographies' },
     { id: 'ai', title: 'AI conversation logs', subtitle: 'All chat history with the AI' },
     { id: 'profile', title: 'Profile data', subtitle: 'Names, dates, relationships' },
-    { id: 'export', title: 'Export in open format', subtitle: 'Download as ZIP before transfer' },
 ];
 
 export default function DataTransferScreen() {
@@ -43,7 +42,7 @@ export default function DataTransferScreen() {
     const [passwordModalVisible, setPasswordModalVisible] = useState(false);
 
     // Pre-select items according to user visual reference (all except AI)
-    const [selectedIds, setSelectedIds] = useState<string[]>(['memories', 'narratives', 'profile', 'export']);
+    const [selectedIds, setSelectedIds] = useState<string[]>(['memories', 'narratives', 'profile']);
 
     const toggleSelection = (id: string) => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -67,7 +66,7 @@ export default function DataTransferScreen() {
             notes: selectedIds.includes('memories') || selectedIds.includes('narratives'),
             messages: selectedIds.includes('ai'),
             paymentInfo: false,
-            accountTransfer: selectedIds.includes('export'),
+            accountTransfer: false,
         };
 
         const response = await api.post('/trusted-contacts', {
@@ -82,7 +81,9 @@ export default function DataTransferScreen() {
             console.log('[TrustedContacts] Creation successful.');
             setPasswordModalVisible(false);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            router.push('/legacy-mode/success');
+            setTimeout(() => {
+                router.push('/legacy-mode/success');
+            }, 400);
         } else {
             console.warn('[TrustedContacts] Creation failed:', response.message);
             throw new Error(response.message || 'Failed to create trusted contact. Please check your password.');
