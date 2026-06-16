@@ -24,6 +24,27 @@ import { useAuth } from '@/hooks/use-auth';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { useMemoryStore, OpenedMemory } from '@/store/memory-store';
+import Svg, { Path, Circle } from 'react-native-svg';
+
+const WAVE_HEIGHT = 20; // Height of the SVG canvas
+const WAVE_AMPLITUDE = 3.5; // Amplitude of squiggles
+const WAVE_LENGTH = 20; // Period of squiggles in pixels
+
+const generateWavePath = (activeWidth: number, phase: number): string => {
+    const centerY = WAVE_HEIGHT / 2;
+    if (activeWidth <= 0) return `M 0 ${centerY}`;
+    
+    let d = `M 0 ${centerY}`;
+    const step = 3; // Evaluate every 3 pixels for smooth rendering
+    for (let x = 0; x <= activeWidth; x += step) {
+        const y = centerY + WAVE_AMPLITUDE * Math.sin((2 * Math.PI * x) / WAVE_LENGTH - phase);
+        d += ` L ${x} ${y}`;
+    }
+    // Cap at activeWidth exactly
+    const yEnd = centerY + WAVE_AMPLITUDE * Math.sin((2 * Math.PI * activeWidth) / WAVE_LENGTH - phase);
+    d += ` L ${activeWidth} ${yEnd}`;
+    return d;
+};
 
 const displayTypeMap: Record<string, string> = {
     'photo': 'Photo',
@@ -110,6 +131,29 @@ export default function MemoryDetailScreen() {
     const seekBarPageX = useRef(0);
     const [isSeeking, setIsSeeking] = useState(false);
     const [seekPosition, setSeekPosition] = useState(0); // 0–1 fraction
+    const [phase, setPhase] = useState(0);
+    const [trackWidth, setTrackWidth] = useState(0);
+
+    // Traveling wave animation loop when audio is playing
+    useEffect(() => {
+        if (!isPlayingAudio) return;
+        let animationFrameId: number;
+        let lastTime = Date.now();
+
+        const tick = () => {
+            const now = Date.now();
+            const delta = now - lastTime;
+            lastTime = now;
+            // 0.008 radians per millisecond speed
+            setPhase((prev) => (prev + 0.008 * delta) % (2 * Math.PI));
+            animationFrameId = requestAnimationFrame(tick);
+        };
+
+        animationFrameId = requestAnimationFrame(tick);
+        return () => {
+            cancelAnimationFrame(animationFrameId);
+        };
+    }, [isPlayingAudio]);
 
     const currentTime = isSeeking ? seekPosition * (audioStatus.duration || 0) : (audioStatus.currentTime ?? 0);
     const duration = audioStatus.duration || 0;
@@ -429,36 +473,44 @@ export default function MemoryDetailScreen() {
                             ref={seekBarRef}
                             style={styles.seekTrackWrapper}
                             onLayout={() => {
-                                seekBarRef.current?.measure((_x, _y, width, _h, pageX) => {
-                                    seekBarWidth.current = width;
+                                seekBarRef.current?.measure((_x, _y, w, _h, pageX) => {
+                                    seekBarWidth.current = w;
                                     seekBarPageX.current = pageX;
+                                    setTrackWidth(w);
                                 });
                             }}
                             {...panResponder.panHandlers}
                         >
-                            {/* Background track */}
-                            <View style={[styles.seekTrack, { backgroundColor: isDarkMode ? '#3A3A3A' : '#D0D0D0' }]}>
-                                {/* Filled portion */}
-                                <View
-                                    style={[
-                                        styles.seekFill,
-                                        {
-                                            width: `${Math.min(progress * 100, 100)}%`,
-                                            backgroundColor: colors.primaryAlt,
-                                        }
-                                    ]}
-                                />
-                                {/* Thumb */}
-                                <View
-                                    style={[
-                                        styles.seekThumb,
-                                        {
-                                            left: `${Math.min(progress * 100, 100)}%`,
-                                            backgroundColor: colors.primaryAlt,
-                                            transform: [{ translateX: -ms(8) }],
-                                        }
-                                    ]}
-                                />
+                            {/* Wavy seekbar track */}
+                            <View style={styles.waveformContainer}>
+                                <Svg width="100%" height={WAVE_HEIGHT} style={{ overflow: 'visible' }}>
+                                    {/* Inactive Track - Thick straight line */}
+                                    <Path
+                                        d={`M ${progress * trackWidth} ${WAVE_HEIGHT / 2} L ${trackWidth} ${WAVE_HEIGHT / 2}`}
+                                        fill="none"
+                                        stroke={isDarkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)'}
+                                        strokeWidth={4}
+                                        strokeLinecap="round"
+                                    />
+                                    {/* Active Track - Squiggly sine wave */}
+                                    <Path
+                                        d={generateWavePath(progress * trackWidth, phase)}
+                                        fill="none"
+                                        stroke={colors.primaryAlt}
+                                        strokeWidth={3}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                    />
+                                    {/* Seek Thumb - circle centered on progress edge */}
+                                    {progress * trackWidth > 0 && (
+                                        <Circle
+                                            cx={progress * trackWidth}
+                                            cy={WAVE_HEIGHT / 2}
+                                            r={6}
+                                            fill={colors.primaryAlt}
+                                        />
+                                    )}
+                                </Svg>
                             </View>
                         </View>
 
@@ -661,31 +713,10 @@ const styles = StyleSheet.create({
         paddingVertical: vs(10), // Expand hit area vertically
         justifyContent: 'center',
     },
-    seekTrack: {
-        height: vs(4),
-        borderRadius: ms(2),
+    waveformContainer: {
+        height: vs(WAVE_HEIGHT),
         width: '100%',
-        position: 'relative',
-        overflow: 'visible',
-    },
-    seekFill: {
-        height: '100%',
-        borderRadius: ms(2),
-        position: 'absolute',
-        left: 0,
-        top: 0,
-    },
-    seekThumb: {
-        position: 'absolute',
-        top: vs(-6),
-        width: ms(16),
-        height: ms(16),
-        borderRadius: ms(8),
-        elevation: 3,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.2,
-        shadowRadius: 2,
+        justifyContent: 'center',
     },
     timeRow: {
         flexDirection: 'row',
