@@ -342,7 +342,7 @@ export default function ProfileScreen() {
                         label="Legacy Access" 
                         subtext="Manage legacy access rules and settings"
                         groupType="account" 
-                        onPress={() => { triggerHaptic(); router.push('/legacy-mode/rules'); }} 
+                        onPress={() => { triggerHaptic(); router.push('/legacy-mode/access'); }} 
                         isBlurred={!legacyAccessVal}
                     />
                     <View style={styles.divider} />

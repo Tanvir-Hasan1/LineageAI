@@ -68,7 +68,7 @@ class ApiClient {
       }
 
       // Intercept 401 and refresh token if possible, BEFORE parsing JSON
-      if (response.status === 401 && path !== '/auth/refresh' && !options._retry) {
+      if (response.status === 401 && path !== '/auth/refresh' && path !== '/auth/logout' && !options._retry) {
         options._retry = true;
         const success = await this.refreshTokens();
         if (success) {

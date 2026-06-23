@@ -1,82 +1,88 @@
 import { FONTS, LightTheme } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
+import { useAuth } from '@/hooks/use-auth';
+import { api } from '@/services/api';
+import { useNotificationStore } from '@/store/notification-store';
+import { getAvatarSource, resolveMediaUrl } from '@/utils/image';
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState, useEffect } from 'react';
-import { useAuth } from '@/hooks/use-auth';
-import { getAvatarSource } from '@/utils/image';
-import { useNotificationStore } from '@/store/notification-store';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+    ActivityIndicator,
     ScrollView,
     StatusBar,
     Text,
     TouchableOpacity,
     View,
     useColorScheme,
-    ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScaledSheet } from 'react-native-size-matters';
+import { ScaledSheet, ms, vs } from 'react-native-size-matters';
+
+const displayTypeMap: Record<string, string> = {
+    'photo': 'Photo',
+    'video': 'Video',
+    'voice': 'Voice',
+    'journal': 'Note'
+};
+
+const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return dateString;
+        return date.toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    } catch (e) {
+        return dateString;
+    }
+};
 
 export default function DashboardScreen() {
     const colors = useAppTheme();
     const colorScheme = useColorScheme();
     const styles = useMemo(() => getStyles(colors), [colors]);
     const router = useRouter();
-    const { user, isProfilePictureLoading, setProfilePictureLoading } = useAuth();
+    const { user, familyMembers, fetchFamilyMembers, isProfilePictureLoading, setProfilePictureLoading } = useAuth();
     const [imageError, setImageError] = useState(false);
     const { unreadCount, fetchUnreadCount } = useNotificationStore();
+    const [recentMemories, setRecentMemories] = useState<any[]>([]);
+
+    const fetchRecentMemories = async () => {
+        try {
+            const response = await api.get('/memory-vault');
+            if (response.success && response.data) {
+                let list: any[] = [];
+                if (response.data.data && Array.isArray(response.data.data.memories)) {
+                    list = response.data.data.memories;
+                } else if (Array.isArray(response.data.data)) {
+                    list = response.data.data;
+                } else if (Array.isArray(response.data.memories)) {
+                    list = response.data.memories;
+                } else if (Array.isArray(response.data)) {
+                    list = response.data;
+                }
+                setRecentMemories(list.slice(0, 3));
+            }
+        } catch (e) {
+            console.error('Failed to fetch recent memories:', e);
+        }
+    };
 
     useEffect(() => {
         setImageError(false);
         fetchUnreadCount();
+        fetchFamilyMembers();
+        fetchRecentMemories();
     }, [user?.profilePicture?.url]);
 
     const hasImage = !!(user?.profilePicture?.url || user?.avatarUrl) && !imageError;
-
-    const familyMembers = [
-        {
-            id: '1',
-            name: 'Margaret',
-            relation: 'Mother',
-            memories: 24,
-            image: require('@/assets/images/dashboard/margaret.png'),
-        },
-        {
-            id: '2',
-            name: 'Robert',
-            relation: 'Father',
-            memories: 18,
-            image: require('@/assets/images/dashboard/robert.png'),
-        },
-    ];
-
-    const recentMemories = [
-        {
-            id: 'm1',
-            title: 'Summer at Lake Geneva',
-            author: 'Margaret Mitchell',
-            date: 'August 14, 1978',
-            image: require('@/assets/images/dashboard/lake.png'),
-        },
-        {
-            id: 'm2',
-            title: "Margaret's Wedding Day",
-            author: 'Margaret Mitchell',
-            date: 'June 4, 1967',
-            image: require('@/assets/images/dashboard/wedding.png'),
-        },
-        {
-            id: 'm3',
-            title: 'Morning at the Oregon Coast',
-            author: 'Robert Mitchell',
-            date: 'July 2, 1983',
-            image: require('@/assets/images/dashboard/coast.png'),
-        },
-    ];
 
     return (
         <SafeAreaView edges={['top']} style={styles.container}>
@@ -157,7 +163,10 @@ export default function DashboardScreen() {
                         {/* Add New Member Dotted Box */}
                         <TouchableOpacity
                             activeOpacity={0.7}
-                            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                            onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                router.push('/family-access?openInvite=true');
+                            }}
                             style={styles.addMemberCard}
                         >
                             <View style={styles.addIconCircle}>
@@ -166,33 +175,46 @@ export default function DashboardScreen() {
                             <Text style={styles.addMemberText}>Add New Member</Text>
                         </TouchableOpacity>
 
-                        {familyMembers.map((member) => (
-                            <TouchableOpacity
-                                key={member.id}
-                                activeOpacity={0.9}
-                                style={styles.memberCard}
-                            >
-                                <Image
-                                    source={member.image}
-                                    style={styles.cardBgImage}
-                                />
-                                <LinearGradient
-                                    colors={['transparent', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.9)']}
-                                    style={styles.cardGradient}
+                        {familyMembers.map((member, idx) => {
+                            const avatarUrl = member.profilePicture?.url
+                                ? resolveMediaUrl(member.profilePicture.url)
+                                : null;
+                            const avatarSource = avatarUrl
+                                ? { uri: avatarUrl }
+                                : (idx % 2 === 0
+                                    ? require('@/assets/images/dashboard/margaret.png')
+                                    : require('@/assets/images/dashboard/robert.png'));
+
+                            return (
+                                <TouchableOpacity
+                                    key={member.userId || member.id || String(idx)}
+                                    activeOpacity={0.9}
+                                    style={styles.memberCard}
                                 >
-                                    <View style={styles.memberCardFooter}>
-                                        <Text style={styles.memberName}>{member.name}</Text>
-                                        <Text style={styles.memberRelation}>{member.relation}</Text>
-                                        <View style={styles.memoriesBadge}>
-                                            <View style={styles.smallDot} />
-                                            <Text style={styles.memoriesCount}>
-                                                {member.memories} memories
+                                    <Image
+                                        source={avatarSource}
+                                        style={styles.cardBgImage}
+                                    />
+                                    <LinearGradient
+                                        colors={['transparent', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.9)']}
+                                        style={styles.cardGradient}
+                                    >
+                                        <View style={styles.memberCardFooter}>
+                                            <Text style={styles.memberName}>{member.name}</Text>
+                                            <Text style={styles.memberRelation}>
+                                                {member.relation || (member.role ? member.role.charAt(0).toUpperCase() + member.role.slice(1) : 'Member')}
                                             </Text>
+                                            <View style={styles.memoriesBadge}>
+                                                <View style={styles.smallDot} />
+                                                <Text style={styles.memoriesCount}>
+                                                    {member.memories !== undefined ? member.memories : 0} memories
+                                                </Text>
+                                            </View>
                                         </View>
-                                    </View>
-                                </LinearGradient>
-                            </TouchableOpacity>
-                        ))}
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </ScrollView>
                 </View>
 
@@ -200,36 +222,55 @@ export default function DashboardScreen() {
                 <View style={[styles.section, { marginBottom: 10 }]}>
                     <View style={styles.sectionHeader}>
                         <Text style={styles.sectionTitle}>Recent Memories</Text>
-                        <TouchableOpacity style={styles.seeAllBtn}>
+                        <TouchableOpacity
+                            style={styles.seeAllBtn}
+                            onPress={() => router.push('/vault')}
+                        >
                             <Text style={styles.seeAllText}>See all</Text>
                             <Feather name="chevron-right" size={16} color={colors.textMuted} />
                         </TouchableOpacity>
                     </View>
 
                     <View style={styles.memoriesList}>
-                        {recentMemories.map((memory) => (
-                            <TouchableOpacity
-                                key={memory.id}
-                                activeOpacity={0.8}
-                                style={styles.memoryItem}
-                            >
-                                <Image
-                                    source={memory.image}
-                                    style={styles.memoryThumb}
-                                />
-                                <View style={styles.memoryContent}>
-                                    <Text style={styles.memoryTitle} numberOfLines={1}>
-                                        {memory.title}
-                                    </Text>
-                                    <Text style={styles.memoryMeta} numberOfLines={1}>
-                                        {memory.author} · {memory.date}
-                                    </Text>
-                                </View>
-                                <View style={styles.tagBadge}>
-                                    <Text style={styles.tagText}>Photo</Text>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
+                        {recentMemories.length === 0 ? (
+                            <View style={{ alignItems: 'center', paddingVertical: vs(20) }}>
+                                <Text style={{ color: colors.textMuted, fontFamily: FONTS.sans, fontSize: ms(13) }}>
+                                    No memories preserved yet.
+                                </Text>
+                            </View>
+                        ) : (
+                            recentMemories.map((memory) => {
+                                const hasHeroImage = (memory.type === 'photo' || memory.type === 'video') && memory.files && memory.files.length > 0;
+                                const mediaUrl = hasHeroImage ? resolveMediaUrl(memory.files[0]?.url) : undefined;
+                                const mediaSource = mediaUrl ? { uri: mediaUrl } : require('@/assets/images/dashboard/lake.png');
+                                const displayType = displayTypeMap[memory.type] || 'Note';
+
+                                return (
+                                    <TouchableOpacity
+                                        key={memory.id}
+                                        activeOpacity={0.8}
+                                        style={styles.memoryItem}
+                                        onPress={() => router.push({ pathname: '/memory/[id]', params: { id: memory.id } })}
+                                    >
+                                        <Image
+                                            source={mediaSource}
+                                            style={styles.memoryThumb}
+                                        />
+                                        <View style={styles.memoryContent}>
+                                            <Text style={styles.memoryTitle} numberOfLines={1}>
+                                                {memory.title}
+                                            </Text>
+                                            <Text style={styles.memoryMeta} numberOfLines={1}>
+                                                {memory.whoseMemoryIsThis || 'Unknown'} · {formatDate(memory.date)}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.tagBadge}>
+                                            <Text style={styles.tagText}>{displayType}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })
+                        )}
                     </View>
                 </View>
 

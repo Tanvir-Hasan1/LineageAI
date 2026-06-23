@@ -126,12 +126,15 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   signOut: async () => {
-    try {
-      console.log('[AuthStore] Inactivating tokens by calling backend /auth/logout...');
-      const { api } = require('@/services/api');
-      await api.post('/auth/logout');
-    } catch (apiErr) {
-      console.warn('[AuthStore] Backend logout request failed:', apiErr);
+    const { token } = get();
+    if (token) {
+      try {
+        console.log('[AuthStore] Inactivating tokens by calling backend /auth/logout...');
+        const { api } = require('@/services/api');
+        await api.post('/auth/logout');
+      } catch (apiErr) {
+        console.warn('[AuthStore] Backend logout request failed:', apiErr);
+      }
     }
 
     try {

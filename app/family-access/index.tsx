@@ -1,31 +1,29 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-    View, 
-    Text, 
-    StyleSheet, 
-    TouchableOpacity, 
-    ScrollView, 
-    Image, 
-    useColorScheme,
-    ActivityIndicator,
-    Alert,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import { ms, vs } from 'react-native-size-matters';
 import { FONTS } from '@/constants/theme';
-import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/services/api';
 import { resolveMediaUrl } from '@/utils/image';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    useColorScheme,
+    View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ms, vs } from 'react-native-size-matters';
 
 // STANDALONE SUBCOMPONENT IMPORT
 import InviteModal from '@/components/InviteModal';
 
-// ------------------- MOCK ASSET PATHS -------------------
-const IMG_AVATAR_SARAH = require('@/assets/images/dashboard/margaret.png'); 
-const IMG_AVATAR_JAMES = require('@/assets/images/dashboard/robert.png');
+
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface FamilyMember {
@@ -46,6 +44,7 @@ interface FamilyMember {
 
 export default function FamilyAccessScreen() {
     const router = useRouter();
+    const { openInvite } = useLocalSearchParams<{ openInvite?: string }>();
     const isDarkMode = useColorScheme() === 'dark';
     const { user } = useAuth();
 
@@ -58,6 +57,15 @@ export default function FamilyAccessScreen() {
     const [invitations, setInvitations] = useState<any[]>([]);
     const [isInvitationsLoading, setIsInvitationsLoading] = useState(true);
     const [actioningId, setActioningId] = useState<string | null>(null);
+
+    // ── Modal State ───────────────────────────────────────────────────────────
+    const [inviteVisible, setInviteVisible] = useState(false);
+
+    useEffect(() => {
+        if (openInvite === 'true') {
+            setInviteVisible(true);
+        }
+    }, [openInvite]);
 
     const fetchFamilyMembers = useCallback(async () => {
         setIsLoading(true);
@@ -153,7 +161,6 @@ export default function FamilyAccessScreen() {
     };
 
 
-    const [inviteVisible, setInviteVisible] = useState(false);
     const triggerHaptic = () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const palette = {
@@ -177,17 +184,17 @@ export default function FamilyAccessScreen() {
     const memberCountText = isLoading
         ? 'Loading members...'
         : error
-        ? 'Could not load members'
-        : familyMembers.length > 0
-        ? `${familyMembers.length} member${familyMembers.length === 1 ? '' : 's'} with access`
-        : 'No family members with access';
+            ? 'Could not load members'
+            : familyMembers.length > 0
+                ? `${familyMembers.length} member${familyMembers.length === 1 ? '' : 's'} with access`
+                : 'No family members with access';
 
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: palette.bg }]} edges={['top']}>
-            
+
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={[styles.backBtn, { backgroundColor: palette.backBtnBg }]}
                     onPress={() => router.back()}
                 >
@@ -196,12 +203,12 @@ export default function FamilyAccessScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                
+
                 <Text style={[styles.pageTitle, { color: palette.textDark }]}>Family Access</Text>
                 <Text style={[styles.pageSubText, { color: palette.textSub }]}>{memberCountText}</Text>
 
                 {/* TOP ACTION POD */}
-                <TouchableOpacity 
+                <TouchableOpacity
                     activeOpacity={0.8}
                     style={[styles.inviteBox, { backgroundColor: palette.dashedBg, borderColor: palette.dashedBorder }]}
                     onPress={() => { triggerHaptic(); setInviteVisible(true); }}
@@ -254,10 +261,10 @@ export default function FamilyAccessScreen() {
                         const isPending = member.status?.toLowerCase() === 'pending';
                         const cardBg = idx % 2 === 0 ? palette.card1Bg : palette.card2Bg;
                         const badgeBg = idx % 2 === 0 ? palette.badge1Bg : palette.badge2Bg;
-                        
-                        // Pick profile picture if available, fallback to mock avatars
+
+                        // Pick profile picture if available, fallback to default avatar
                         const avatarUrl = member.profilePicture?.url ? resolveMediaUrl(member.profilePicture.url) : null;
-                        const avatarSource = avatarUrl ? { uri: avatarUrl } : (idx % 2 === 0 ? IMG_AVATAR_SARAH : IMG_AVATAR_JAMES);
+                        const avatarSource = avatarUrl ? { uri: avatarUrl } : require('@/assets/images/dashboard/avatar.png');
 
                         return (
                             <View key={member.userId || String(idx)} style={[styles.memberCard, { backgroundColor: cardBg }]}>
@@ -309,7 +316,7 @@ export default function FamilyAccessScreen() {
                         const isActioning = actioningId === invite.id;
 
                         // Resolve name, email, and description based on direction
-                        const displayName = isReceived 
+                        const displayName = isReceived
                             ? (invite.inviter?.name || 'Incoming Invite')
                             : (invite.inviteeName || invite.inviteeEmail);
 
@@ -322,11 +329,11 @@ export default function FamilyAccessScreen() {
                         return (
                             <View key={invite.id || String(idx)} style={[styles.inviteCard, { backgroundColor: cardBg }]}>
                                 <View style={styles.inviteCardHeader}>
-                                    <Feather 
-                                        name={isReceived ? "arrow-down-left" : "arrow-up-right"} 
-                                        size={ms(18)} 
-                                        color={isReceived ? "#8EA281" : "#E0923C"} 
-                                        style={{ marginRight: ms(10) }} 
+                                    <Feather
+                                        name={isReceived ? "arrow-down-left" : "arrow-up-right"}
+                                        size={ms(18)}
+                                        color={isReceived ? "#8EA281" : "#E0923C"}
+                                        style={{ marginRight: ms(10) }}
                                     />
                                     <View style={styles.inviteCardContent}>
                                         <Text style={[styles.memberName, { color: isDarkMode ? '#FFFFFF' : '#2D2C39' }]}>
@@ -359,13 +366,13 @@ export default function FamilyAccessScreen() {
                                             <ActivityIndicator size="small" color="#8EA281" />
                                         ) : (
                                             <>
-                                                <TouchableOpacity 
+                                                <TouchableOpacity
                                                     style={[styles.declineBtn, { borderColor: isDarkMode ? '#FF8B8B' : '#E88B8B' }]}
                                                     onPress={() => handleDeclineInvitation(invite.id)}
                                                 >
                                                     <Text style={[styles.btnText, { color: isDarkMode ? '#FF8B8B' : '#E88B8B' }]}>Decline</Text>
                                                 </TouchableOpacity>
-                                                <TouchableOpacity 
+                                                <TouchableOpacity
                                                     style={[styles.acceptBtn, { backgroundColor: '#8EA281' }]}
                                                     onPress={() => handleAcceptInvitation(invite.id)}
                                                 >
@@ -391,10 +398,10 @@ export default function FamilyAccessScreen() {
             </ScrollView>
 
             {/* CLEAN STANDALONE MODAL */}
-            <InviteModal 
-                visible={inviteVisible} 
-                onClose={() => setInviteVisible(false)} 
-                isDarkMode={isDarkMode} 
+            <InviteModal
+                visible={inviteVisible}
+                onClose={() => setInviteVisible(false)}
+                isDarkMode={isDarkMode}
                 onInviteSuccess={() => {
                     fetchFamilyMembers();
                     fetchInvitations();
