@@ -8,6 +8,7 @@ export interface OpenedMemory {
   files: { key: string; url: string; originalName: string; mimeType: string; size: number }[];
   title: string;
   narrative: string;
+  location?: string;
   date: string;
   tags: string[];
   createdAt: string;
@@ -19,6 +20,7 @@ export interface MemoryDraft {
   whoseMemoryIsThis: string;
   title: string;
   narrative: string;
+  location?: string;
   date: string;
   tags: string[];
   fileUri: string | null;
@@ -44,9 +46,10 @@ interface MemoryStore {
 
 const initialDraft: MemoryDraft = {
   type: 'photo',
-  whoseMemoryIsThis: 'Margaret Mitchell',
+  whoseMemoryIsThis: 'Mine',
   title: '',
   narrative: '',
+  location: '',
   date: new Date().toISOString(),
   tags: [],
   fileUri: null,
@@ -71,6 +74,12 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
   resetDraft: () => set({ draft: { ...initialDraft, date: new Date().toISOString() } }),
   createMemory: async () => {
     const { draft } = get();
+
+    // Client-side validation: location is required for photo & video memories
+    if ((draft.type === 'photo' || draft.type === 'video') && !draft.location?.trim()) {
+      return { success: false, message: 'Location is required for photo and video memories.' };
+    }
+
     set({ isCreating: true });
     try {
       const { api } = require('@/services/api');
@@ -79,6 +88,9 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
       formData.append('whoseMemoryIsThis', draft.whoseMemoryIsThis);
       formData.append('title', draft.title);
       formData.append('narrative', draft.narrative);
+      if (draft.location?.trim()) {
+        formData.append('location', draft.location.trim());
+      }
       formData.append('date', draft.date);
 
       // OpenAPI spec supports comma-separated list or JSON array of tags

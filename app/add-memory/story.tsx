@@ -32,10 +32,13 @@ export default function StoryStepScreen() {
     // Logic: Form Inputs
     const [title, setTitle] = useState('');
     const [narrative, setNarrative] = useState('');
+    const [location, setLocation] = useState('');
     const [date, setDate] = useState('');
     const [friendlyDate, setFriendlyDate] = useState('');
     const [showCalendar, setShowCalendar] = useState(false);
     const [fileUri, setFileUri] = useState<string | null>(null);
+
+    const isLocationRequired = type === 'photo' || type === 'video';
 
     const handleDayPress = (day: any) => {
         const dateStr = day.dateString;
@@ -145,6 +148,19 @@ export default function StoryStepScreen() {
                     />
                 </View>
 
+                <Text style={[styles.label, { color: palette.textDark, marginTop: vs(16) }]}>
+                    Location {isLocationRequired ? '(Required)' : '(Optional)'}
+                </Text>
+                <View style={[styles.inputWrapper, { backgroundColor: palette.inputBg }]}>
+                    <TextInput
+                        placeholder={isLocationRequired ? "e.g. Paris, France (Required)" : "e.g. Paris, France"}
+                        placeholderTextColor={palette.placeholder}
+                        style={[styles.input, { color: palette.textDark }]}
+                        value={location}
+                        onChangeText={setLocation}
+                    />
+                </View>
+
                 <Text style={[styles.label, { color: palette.textDark, marginTop: vs(16) }]}>Date</Text>
                 <TouchableOpacity
                     activeOpacity={0.8}
@@ -177,6 +193,10 @@ export default function StoryStepScreen() {
                             Alert.alert('Missing Narrative', 'Please tell the story behind this memory.');
                             return;
                         }
+                        if (isLocationRequired && !location.trim()) {
+                            Alert.alert('Missing Location', 'Location is required for photo and video memories.');
+                            return;
+                        }
                         if (!date) {
                             Alert.alert('Missing Date', 'Please select a date.');
                             return;
@@ -189,6 +209,7 @@ export default function StoryStepScreen() {
                         setDraft({
                             title: title.trim(),
                             narrative: narrative.trim(),
+                            location: location.trim(),
                             date: new Date(date).toISOString(),
                             fileUri
                         });

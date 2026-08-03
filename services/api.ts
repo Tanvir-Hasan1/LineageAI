@@ -152,6 +152,7 @@ class ApiClient {
         data: null,
         message: apiError.message,
         status: apiError.statusCode,
+        errors: apiError.errors,
       };
     }
   }

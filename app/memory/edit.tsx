@@ -80,6 +80,8 @@ export default function EditMemoryScreen() {
     // form state
     const [title, setTitle] = useState('');
     const [narrative, setNarrative] = useState('');
+    const [location, setLocation] = useState('');
+    const [memType, setMemType] = useState('photo');
     const [date, setDate] = useState('');           // yyyy-mm-dd
     const [friendlyDate, setFriendlyDate] = useState('');
     const [selectedPersona, setSelectedPersona] = useState('mine');
@@ -130,6 +132,8 @@ export default function EditMemoryScreen() {
                     if (mem) {
                         setTitle(mem.title || '');
                         setNarrative(mem.narrative || '');
+                        setLocation(mem.location || '');
+                        setMemType(mem.type || 'photo');
 
                         const ymd = isoToYMD(mem.date || '');
                         setDate(ymd);
@@ -208,6 +212,11 @@ export default function EditMemoryScreen() {
             Alert.alert('Missing Narrative', 'Please add a narrative.');
             return;
         }
+        const isLocationRequired = memType === 'photo' || memType === 'video';
+        if (isLocationRequired && !location.trim()) {
+            Alert.alert('Missing Location', 'Location is required for photo and video memories.');
+            return;
+        }
         if (!date) {
             Alert.alert('Missing Date', 'Please select a date.');
             return;
@@ -219,13 +228,16 @@ export default function EditMemoryScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setIsSaving(true);
         try {
-            const body = {
+            const body: any = {
                 title: title.trim(),
                 narrative: narrative.trim(),
                 date: new Date(date).toISOString(),
                 whoseMemoryIsThis,
                 tags: selectedTags,
             };
+            if (location.trim()) {
+                body.location = location.trim();
+            }
             const res = await api.patch(`/memory-vault/${id}`, body);
             if (res.success) {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -233,6 +245,7 @@ export default function EditMemoryScreen() {
                 patchOpenedMemory({
                     title: body.title,
                     narrative: body.narrative,
+                    location: body.location,
                     date: body.date,
                     whoseMemoryIsThis: body.whoseMemoryIsThis,
                     tags: body.tags,
@@ -333,6 +346,19 @@ export default function EditMemoryScreen() {
                             textAlignVertical="top"
                             value={narrative}
                             onChangeText={setNarrative}
+                        />
+                    </View>
+
+                    <Text style={[styles.label, { color: palette.textDark, marginTop: vs(16) }]}>
+                        Location {(memType === 'photo' || memType === 'video') ? '(Required)' : '(Optional)'}
+                    </Text>
+                    <View style={[styles.inputWrapper, { backgroundColor: palette.inputBg }]}>
+                        <TextInput
+                            style={[styles.input, { color: palette.textDark }]}
+                            placeholder={(memType === 'photo' || memType === 'video') ? "e.g. Paris, France (Required)" : "e.g. Paris, France"}
+                            placeholderTextColor={palette.placeholder}
+                            value={location}
+                            onChangeText={setLocation}
                         />
                     </View>
 

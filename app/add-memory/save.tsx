@@ -173,7 +173,7 @@ export default function SaveReviewScreen() {
                     </Text>
 
                     <Text style={[styles.memDate, { color: isDarkMode ? '#A0A0A0' : '#78849B' }]}>
-                        {formattedDate}
+                        {formattedDate}{draft.location ? ` • ${draft.location}` : ''}
                     </Text>
 
                     {/* Local Tag Array Display */}

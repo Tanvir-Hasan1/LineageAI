@@ -190,6 +190,16 @@ export default function DashboardScreen() {
                                     key={member.userId || member.id || String(idx)}
                                     activeOpacity={0.9}
                                     style={styles.memberCard}
+                                    onPress={() => {
+                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                        router.push({
+                                            pathname: '/chat' as any,
+                                            params: {
+                                                person: member.name || 'Margaret',
+                                                familyMemberUserId: member.userId || member.id
+                                            }
+                                        });
+                                    }}
                                 >
                                     <Image
                                         source={avatarSource}

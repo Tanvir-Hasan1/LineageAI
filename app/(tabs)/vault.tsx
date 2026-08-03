@@ -1,5 +1,6 @@
 import { FONTS } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
+import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/services/api';
 import { resolveMediaUrl } from '@/utils/image';
 import { Feather } from '@expo/vector-icons';
@@ -34,6 +35,7 @@ export interface ApiMemory {
     }[];
     title: string;
     narrative: string;
+    location?: string;
     date: string;
     tags: string[];
     createdAt: string;
@@ -113,6 +115,8 @@ export default function MemoryVaultScreen() {
     const colors = useAppTheme();
     const isDarkMode = useColorScheme() === 'dark';
     const router = useRouter();
+    const { user } = useAuth();
+    const currentUserName = user?.name || user?.firstName || 'Tanvir Hasan';
     const [searchQuery, setSearchQuery] = useState('');
     const [activeCategory, setActiveCategory] = useState('All');
 
@@ -286,7 +290,7 @@ export default function MemoryVaultScreen() {
                             <View style={{ flex: 1, marginLeft: !mediaUrl ? ms(12) : 0 }}>
                                 <Text style={[styles.cardTitle, { color: isDarkMode ? '#8EA281' : colors.textDark }]}>{item.title}</Text>
                                 <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
-                                    {item.whoseMemoryIsThis} · {formatDate(item.date)}
+                                    {item.whoseMemoryIsThis} · {formatDate(item.date)}{item.location ? ` · ${item.location}` : ''}
                                 </Text>
                             </View>
                             <View style={[
@@ -342,12 +346,20 @@ export default function MemoryVaultScreen() {
                         {isLoading ? 'Loading memories...' : `${memories.length} ${memories.length === 1 ? 'memory' : 'memories'} preserved`}
                     </Text>
                 </View>
-                <TouchableOpacity
-                    style={[styles.iconBtn, { borderColor: colors.border }]}
-                    onPress={() => router.push('/notifications')}
-                >
-                    <Feather name="bell" size={ms(20)} color={colors.textMuted} />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: ms(8) }}>
+                    <TouchableOpacity
+                        style={[styles.iconBtn, { borderColor: colors.border }]}
+                        onPress={() => router.push('/chat')}
+                    >
+                        <Feather name="message-square" size={ms(20)} color={colors.primaryAlt || '#8EA281'} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.iconBtn, { borderColor: colors.border }]}
+                        onPress={() => router.push('/notifications')}
+                    >
+                        <Feather name="bell" size={ms(20)} color={colors.textMuted} />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             {/* Scrollable Content Region */}
@@ -364,16 +376,44 @@ export default function MemoryVaultScreen() {
             >
                 {/* Moved Search Bar inside Scroll */}
                 <View style={styles.searchSection}>
-                    <View style={[styles.searchBox, { backgroundColor: '#EBEAE3' }]}>
+                    <View style={[styles.searchBox, { backgroundColor: isDarkMode ? '#2C2C2E' : '#EBEAE3' }]}>
                         <Feather name="search" size={ms(18)} color="#8A8D84" style={{ marginRight: ms(10) }} />
                         <TextInput
-                            style={styles.searchInput}
+                            style={[styles.searchInput, { color: isDarkMode ? '#FFFFFF' : '#333' }]}
                             placeholder="Search memories..."
                             placeholderTextColor="#8A8D84"
                             value={searchQuery}
                             onChangeText={setSearchQuery}
                         />
                     </View>
+                </View>
+
+                {/* Ask AI Prominent Banner Card */}
+                <View style={{ paddingHorizontal: ms(20), marginBottom: vs(4) }}>
+                    <TouchableOpacity
+                        activeOpacity={0.85}
+                        style={[
+                            styles.aiBanner,
+                            {
+                                backgroundColor: isDarkMode ? 'rgba(142,162,129,0.14)' : '#EFF4EC',
+                                borderColor: isDarkMode ? 'rgba(142,162,129,0.35)' : '#C4D5BF',
+                            }
+                        ]}
+                        onPress={() => router.push('/chat')}
+                    >
+                        <View style={[styles.aiBannerIconCircle, { backgroundColor: isDarkMode ? '#283325' : '#FFFFFF' }]}>
+                            <Feather name="message-square" size={ms(16)} color="#8EA281" />
+                        </View>
+                        <View style={{ flex: 1, marginLeft: ms(10) }}>
+                            <Text style={[styles.aiBannerTitle, { color: isDarkMode ? '#FFFFFF' : '#2D2C39' }]}>
+                                Ask AI about memories
+                            </Text>
+                            <Text style={[styles.aiBannerSub, { color: isDarkMode ? '#A0A0A0' : '#6A7568' }]}>
+                                Query family stories, events & details
+                            </Text>
+                        </View>
+                        <Feather name="chevron-right" size={ms(18)} color="#8EA281" />
+                    </TouchableOpacity>
                 </View>
 
                 {/* Moved Filters Group inside Scroll */}
@@ -468,7 +508,31 @@ const styles = StyleSheet.create({
     },
     searchSection: {
         paddingHorizontal: ms(20),
-        marginBottom: vs(16),
+        marginBottom: vs(12),
+    },
+    aiBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: ms(12),
+        borderRadius: ms(16),
+        borderWidth: 1,
+    },
+    aiBannerIconCircle: {
+        width: ms(36),
+        height: ms(36),
+        borderRadius: ms(18),
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    aiBannerTitle: {
+        fontFamily: FONTS.serif,
+        fontSize: ms(14),
+        fontWeight: '600',
+    },
+    aiBannerSub: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(11),
+        marginTop: vs(1),
     },
     searchBox: {
         flexDirection: 'row',

@@ -109,13 +109,47 @@ export default function MemoryDetailScreen() {
     const [error, setError] = useState<string | null>(null);
     const [showMenu, setShowMenu] = useState(false);
 
+    // AI Pull quote state
+    const [quoteData, setQuoteData] = useState<{ pullQuote: string | null; commentary: string | null } | null>(null);
+    const [isQuoteLoading, setIsQuoteLoading] = useState(false);
+    const retryTimeoutRef = useRef<any>(null);
+
     // Store — opened memory cache
     const { openedMemory, setOpenedMemory, patchOpenedMemory, clearOpenedMemory } = useMemoryStore();
+
+    const fetchQuote = useCallback(async (memoryId: string, currentRetry = 0) => {
+        if (!memoryId) return;
+        if (currentRetry === 0) {
+            setIsQuoteLoading(true);
+        }
+        try {
+            const res = await api.get(`/memory-vault/${memoryId}/quote`);
+            if (res.success && res.data) {
+                const data = res.data.data || res.data;
+                const pullQuote = data?.pullQuote || null;
+                const commentary = data?.commentary || null;
+                
+                setQuoteData({ pullQuote, commentary });
+
+                // Retries a couple of times a few seconds apart if both fields are null
+                if (!pullQuote && !commentary && currentRetry < 2) {
+                    retryTimeoutRef.current = setTimeout(() => {
+                        fetchQuote(memoryId, currentRetry + 1);
+                    }, 3500);
+                }
+            }
+        } catch (e) {
+            console.log('[MemoryDetail] Fetch quote error:', e);
+        } finally {
+            setIsQuoteLoading(false);
+        }
+    }, []);
 
     // Keep local state in sync when the store is patched from the edit screen
     useEffect(() => {
         if (openedMemory && openedMemory.id === id) {
             setMemory(openedMemory as ApiMemory);
+            fetchQuote(id, 0);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [openedMemory]);
@@ -332,10 +366,16 @@ export default function MemoryDetailScreen() {
     }, [id, setOpenedMemory]);
 
     useEffect(() => {
-        fetchMemoryDetail();
+        if (id) {
+            fetchMemoryDetail();
+            fetchQuote(id, 0);
+        }
         // Clear the cache when leaving this screen
-        return () => { clearOpenedMemory(); };
-    }, [fetchMemoryDetail, clearOpenedMemory]);
+        return () => {
+            if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+            clearOpenedMemory();
+        };
+    }, [id, fetchMemoryDetail, fetchQuote, clearOpenedMemory]);
 
     const mediaUrl = useMemo(() => {
         if (!memory || !memory.files || memory.files.length === 0) return undefined;
@@ -533,7 +573,40 @@ export default function MemoryDetailScreen() {
                         <Text style={[styles.metaText, { color: colors.textMuted }]}>
                             {isMyMemory ? 'Mine' : memory.whoseMemoryIsThis} · {formatDate(memory.date)}
                         </Text>
+                        {memory.location ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: vs(4) }}>
+                                <Feather name="map-pin" size={ms(12)} color={isDarkMode ? '#8EA281' : colors.textMuted} style={{ marginRight: ms(4) }} />
+                                <Text style={[styles.metaText, { color: colors.textMuted }]}>{memory.location}</Text>
+                            </View>
+                        ) : null}
                     </View>
+
+                    {/* AI Pull-Quote & Commentary Block */}
+                    {isQuoteLoading && !quoteData ? (
+                        <View style={[styles.quoteCard, { backgroundColor: isDarkMode ? 'rgba(142,162,129,0.1)' : '#F2F6F0' }]}>
+                            <ActivityIndicator size="small" color="#8EA281" />
+                            <Text style={[styles.quotePlaceholderText, { color: isDarkMode ? '#A0A0A0' : '#666' }]}>Preparing AI quote...</Text>
+                        </View>
+                    ) : (quoteData && (quoteData.pullQuote || quoteData.commentary) ? (
+                        <View style={[styles.quoteCard, { backgroundColor: isDarkMode ? 'rgba(142,162,129,0.12)' : '#F2F6F0', borderColor: 'rgba(142,162,129,0.3)', borderWidth: 1 }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: vs(6) }}>
+                                <Feather name="book-open" size={ms(14)} color="#8EA281" style={{ marginRight: ms(6) }} />
+                                <Text style={{ fontSize: ms(11), fontFamily: FONTS.serif, color: '#8EA281', letterSpacing: 0.8, textTransform: 'uppercase', fontWeight: '600' }}>
+                                    AI Insight
+                                </Text>
+                            </View>
+                            {quoteData.pullQuote ? (
+                                <Text style={[styles.pullQuoteText, { color: isDarkMode ? '#E0E7DC' : '#2D3E2B' }]}>
+                                    "{quoteData.pullQuote}"
+                                </Text>
+                            ) : null}
+                            {quoteData.commentary ? (
+                                <Text style={[styles.commentaryText, { color: isDarkMode ? '#B0C2A8' : '#4E6347' }]}>
+                                    {quoteData.commentary}
+                                </Text>
+                            ) : null}
+                        </View>
+                    ) : null)}
 
                     <Text style={[styles.narrative, { color: isDarkMode ? '#D0D0D0' : '#444' }]}>
                         {memory.narrative}
@@ -756,6 +829,31 @@ const styles = StyleSheet.create({
         fontSize: ms(15),
         lineHeight: vs(22),
         marginBottom: vs(20),
+    },
+    quoteCard: {
+        borderRadius: ms(16),
+        padding: ms(14),
+        marginBottom: vs(16),
+        flexDirection: 'column',
+    },
+    quotePlaceholderText: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(12),
+        fontStyle: 'italic',
+        marginTop: vs(6),
+    },
+    pullQuoteText: {
+        fontFamily: FONTS.serif,
+        fontSize: ms(15),
+        fontStyle: 'italic',
+        lineHeight: vs(21),
+        marginBottom: vs(6),
+        fontWeight: '500',
+    },
+    commentaryText: {
+        fontFamily: FONTS.sans,
+        fontSize: ms(13),
+        lineHeight: vs(18),
     },
     tagRow: {
         flexDirection: 'row',
