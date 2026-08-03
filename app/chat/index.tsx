@@ -117,9 +117,7 @@ export default function MemoryChatScreen() {
                 body.familyMemberUserId = familyMemberUserId;
             }
 
-            console.log('[MemoryChat] Sending payload ->', JSON.stringify(body));
             const response = await api.post('/memory-chat', body);
-            console.log('[MemoryChat] API response ->', JSON.stringify(response));
 
             if (response.success && response.data) {
                 const data = response.data.data || response.data;
