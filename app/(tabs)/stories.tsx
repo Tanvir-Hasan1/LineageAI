@@ -1,11 +1,15 @@
 import { FONTS, LightTheme } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
+import { api } from '@/services/api';
+import { resolveMediaUrl } from '@/utils/image';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useMemo } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
+    ActivityIndicator,
     ScrollView,
     StatusBar,
     Text,
@@ -16,54 +20,110 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScaledSheet } from 'react-native-size-matters';
 
+const FALLBACK_IMAGES = [
+    require('@/assets/images/dashboard/lake.png'),
+    require('@/assets/images/dashboard/wedding.png'),
+    require('@/assets/images/dashboard/coast.png'),
+    require('@/assets/images/dashboard/robert.png'),
+];
+
+const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return dateString;
+        return date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    } catch (e) {
+        return dateString;
+    }
+};
+
+const formatCategory = (mem: any) => {
+    if (mem.tags && mem.tags.length > 0) {
+        const tag = mem.tags[0].replace(/^#/, '');
+        return tag.charAt(0).toUpperCase() + tag.slice(1);
+    }
+    if (mem.type === 'photo') return 'Photo';
+    if (mem.type === 'video') return 'Video';
+    if (mem.type === 'voice') return 'Voice';
+    return 'Journal';
+};
+
+const calcReadTime = (narrative?: string) => {
+    const text = narrative || '';
+    const words = text.trim().split(/\s+/).length;
+    const mins = Math.max(1, Math.ceil(words / 40));
+    return `${mins} min read`;
+};
+
 export default function StoriesScreen() {
     const colors = useAppTheme();
     const colorScheme = useColorScheme();
     const styles = useMemo(() => getStyles(colors), [colors]);
+    const router = useRouter();
 
-    const featuredStory = {
-        id: 'f1',
-        title: 'The Great Migration',
-        excerpt: 'Leaving the familiar shores of the old world behind, they embarked on a journey that would change our family line forever...',
-        author: 'Margaret Mitchell',
-        date: 'Nov 12, 1952',
-        image: require('@/assets/images/dashboard/lake.png'),
-        readTime: '5 min read',
-        category: 'Ancestry'
-    };
+    const [memories, setMemories] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [activeCategory, setActiveCategory] = useState('All');
 
-    const stories = [
-        {
-            id: 's1',
-            title: "Margaret's Wedding Day",
-            excerpt: "A day filled with joy, laughter, and an unexpected rainstorm that made for the most beautiful photographs.",
-            author: 'Robert Mitchell',
-            date: 'June 4, 1967',
-            image: require('@/assets/images/dashboard/wedding.png'),
-            readTime: '3 min read',
-            category: 'Milestone'
-        },
-        {
-            id: 's2',
-            title: 'Morning at the Oregon Coast',
-            excerpt: "The waves crashed against the rocks as we built our first campfire. The smell of saltwater and burning pine is something I'll never forget.",
-            author: 'Margaret Mitchell',
-            date: 'July 2, 1983',
-            image: require('@/assets/images/dashboard/coast.png'),
-            readTime: '4 min read',
-            category: 'Travel'
-        },
-        {
-            id: 's3',
-            title: 'Building the Family Home',
-            excerpt: "It took three years, countless weekends, and help from all the neighbors to finish the house on Elm Street.",
-            author: 'Robert Mitchell',
-            date: 'Spring 1975',
-            image: require('@/assets/images/dashboard/robert.png'),
-            readTime: '6 min read',
-            category: 'Milestone'
+    const fetchStoriesMemories = useCallback(async () => {
+        try {
+            const response = await api.get('/memory-vault');
+            if (response.success && response.data) {
+                let list: any[] = [];
+                if (response.data.data && Array.isArray(response.data.data.memories)) {
+                    list = response.data.data.memories;
+                } else if (Array.isArray(response.data.data)) {
+                    list = response.data.data;
+                } else if (Array.isArray(response.data.memories)) {
+                    list = response.data.memories;
+                } else if (Array.isArray(response.data)) {
+                    list = response.data;
+                }
+                setMemories(list);
+            }
+        } catch (e) {
+            console.error('[Stories] Failed to fetch memories:', e);
+        } finally {
+            setIsLoading(false);
         }
-    ];
+    }, []);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchStoriesMemories();
+        }, [fetchStoriesMemories])
+    );
+
+    // Pick recent photo memory as featured top story
+    const featuredPhotoMemory = useMemo(() => {
+        if (memories.length === 0) return null;
+        const photoMem = memories.find((m: any) => (m.type === 'photo' || m.type === 'video') && m.files && m.files.length > 0);
+        return photoMem || null;
+    }, [memories]);
+
+    // List items excluding featured memory
+    const remainingMemories = useMemo(() => {
+        let list = memories;
+        if (featuredPhotoMemory) {
+            list = memories.filter((m: any) => m.id !== featuredPhotoMemory.id);
+        }
+        if (activeCategory !== 'All') {
+            const catLower = activeCategory.toLowerCase();
+            list = list.filter((m: any) => {
+                const category = formatCategory(m).toLowerCase();
+                const type = (m.type || '').toLowerCase();
+                return category.includes(catLower) || type.includes(catLower);
+            });
+        }
+        return list;
+    }, [memories, featuredPhotoMemory, activeCategory]);
+
+    const categories = ['All', 'Photos', 'Milestones', 'Ancestry', 'Travel'];
 
     return (
         <SafeAreaView edges={['top']} style={styles.container}>
@@ -99,32 +159,55 @@ export default function StoriesScreen() {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
             >
-                {/* Featured Story */}
-                <View style={styles.section}>
-                    <TouchableOpacity 
-                        activeOpacity={0.9} 
-                        style={styles.featuredCard}
-                        onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                    >
-                        <Image source={featuredStory.image} style={styles.featuredImage} />
-                        <LinearGradient
-                            colors={['transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.9)']}
-                            style={styles.featuredGradient}
+                {/* Featured Story Card */}
+                {isLoading ? (
+                    <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                        <ActivityIndicator size="large" color={colors.primaryAlt || '#8EA281'} />
+                    </View>
+                ) : featuredPhotoMemory ? (
+                    <View style={styles.section}>
+                        <TouchableOpacity 
+                            activeOpacity={0.9} 
+                            style={styles.featuredCard}
+                            onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                router.push({
+                                    pathname: '/memory/[id]' as any,
+                                    params: { id: featuredPhotoMemory.id, fromStories: 'true' }
+                                });
+                            }}
                         >
-                            <View style={styles.categoryBadge}>
-                                <Text style={styles.categoryText}>{featuredStory.category}</Text>
-                            </View>
-                            <Text style={styles.featuredTitle}>{featuredStory.title}</Text>
-                            <Text style={styles.featuredExcerpt} numberOfLines={2}>{featuredStory.excerpt}</Text>
-                            <View style={styles.metaRow}>
-                                <Text style={styles.metaText}>{featuredStory.author} · {featuredStory.date}</Text>
-                                <View style={styles.dotSeparator} />
-                                <Feather name="clock" size={12} color="rgba(255,255,255,0.7)" />
-                                <Text style={styles.metaText}>{featuredStory.readTime}</Text>
-                            </View>
-                        </LinearGradient>
-                    </TouchableOpacity>
-                </View>
+                            <Image 
+                                source={
+                                    featuredPhotoMemory.files?.[0]?.url
+                                        ? { uri: resolveMediaUrl(featuredPhotoMemory.files[0].url) }
+                                        : FALLBACK_IMAGES[0]
+                                } 
+                                style={styles.featuredImage} 
+                            />
+                            <LinearGradient
+                                colors={['transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.9)']}
+                                style={styles.featuredGradient}
+                            >
+                                <View style={styles.categoryBadge}>
+                                    <Text style={styles.categoryText}>{formatCategory(featuredPhotoMemory)}</Text>
+                                </View>
+                                <Text style={styles.featuredTitle}>{featuredPhotoMemory.title}</Text>
+                                <Text style={styles.featuredExcerpt} numberOfLines={2}>
+                                    {featuredPhotoMemory.narrative || featuredPhotoMemory.location || 'A preserved family memory.'}
+                                </Text>
+                                <View style={styles.metaRow}>
+                                    <Text style={styles.metaText}>
+                                        {featuredPhotoMemory.whoseMemoryIsThis || 'Mine'} · {formatDate(featuredPhotoMemory.date)}
+                                    </Text>
+                                    <View style={styles.dotSeparator} />
+                                    <Feather name="clock" size={12} color="rgba(255,255,255,0.7)" />
+                                    <Text style={styles.metaText}>{calcReadTime(featuredPhotoMemory.narrative)}</Text>
+                                </View>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </View>
+                ) : null}
 
                 {/* Filter Tabs / Tags */}
                 <ScrollView 
@@ -132,45 +215,77 @@ export default function StoriesScreen() {
                     showsHorizontalScrollIndicator={false} 
                     contentContainerStyle={styles.filterTabs}
                 >
-                    {['All', 'Milestones', 'Ancestry', 'Travel', 'Letters'].map((tab, index) => (
-                        <TouchableOpacity 
-                            key={tab} 
-                            style={[styles.filterTab, index === 0 && styles.filterTabActive]}
-                            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                        >
-                            <Text style={[styles.filterTabText, index === 0 && styles.filterTabTextActive]}>{tab}</Text>
-                        </TouchableOpacity>
-                    ))}
+                    {categories.map((tab) => {
+                        const isActive = activeCategory === tab;
+                        return (
+                            <TouchableOpacity 
+                                key={tab} 
+                                style={[styles.filterTab, isActive && styles.filterTabActive]}
+                                onPress={() => {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                    setActiveCategory(tab);
+                                }}
+                            >
+                                <Text style={[styles.filterTabText, isActive && styles.filterTabTextActive]}>{tab}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </ScrollView>
 
                 {/* Story List */}
                 <View style={styles.storyList}>
-                    {stories.map((story) => (
-                        <TouchableOpacity 
-                            key={story.id} 
-                            activeOpacity={0.8}
-                            style={styles.storyCard}
-                            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                        >
-                            <Image source={story.image} style={styles.storyThumb} />
-                            <View style={styles.storyContent}>
-                                <Text style={styles.storyCategory}>{story.category}</Text>
-                                <Text style={styles.storyTitle} numberOfLines={2}>{story.title}</Text>
-                                <Text style={styles.storyExcerpt} numberOfLines={2}>{story.excerpt}</Text>
-                                <View style={styles.storyMetaRow}>
-                                    <Text style={styles.storyMetaText}>{story.date}</Text>
-                                    <View style={styles.dotSeparatorDark} />
-                                    <Text style={styles.storyMetaText}>{story.readTime}</Text>
+                    {remainingMemories.map((story, idx) => {
+                        const isPhotoOrVideo = (story.type === 'photo' || story.type === 'video') && story.files && story.files.length > 0;
+                        const isAudio = story.type === 'voice' || story.type === 'audio' || story.type === 'music';
+                        const mediaUrl = story.files?.[0]?.url ? resolveMediaUrl(story.files[0].url) : null;
+
+                        return (
+                            <TouchableOpacity 
+                                key={story.id} 
+                                activeOpacity={0.8}
+                                style={styles.storyCard}
+                                onPress={() => {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                    router.push({
+                                        pathname: '/memory/[id]' as any,
+                                        params: { id: story.id, fromStories: 'true' }
+                                    });
+                                }}
+                            >
+                                {isPhotoOrVideo && mediaUrl ? (
+                                    <Image source={{ uri: mediaUrl }} style={styles.storyThumb} />
+                                ) : isAudio ? (
+                                    <View style={[styles.storyThumb, styles.iconThumb, { backgroundColor: colorScheme === 'dark' ? '#222B26' : '#E8F2EC' }]}>
+                                        <Ionicons name="musical-notes-outline" size={28} color={colorScheme === 'dark' ? '#8EA281' : '#5A754E'} />
+                                    </View>
+                                ) : (
+                                    <View style={[styles.storyThumb, styles.iconThumb, { backgroundColor: colorScheme === 'dark' ? '#282733' : '#EFEBF6' }]}>
+                                        <Feather name="file-text" size={26} color={colorScheme === 'dark' ? '#A594D0' : '#6C5896'} />
+                                    </View>
+                                )}
+
+                                <View style={styles.storyContent}>
+                                    <Text style={styles.storyCategory}>{formatCategory(story)}</Text>
+                                    <Text style={styles.storyTitle} numberOfLines={2}>{story.title}</Text>
+                                    <Text style={styles.storyExcerpt} numberOfLines={2}>
+                                        {story.narrative || story.location || 'Preserved family memory.'}
+                                    </Text>
+                                    <View style={styles.storyMetaRow}>
+                                        <Text style={styles.storyMetaText}>{formatDate(story.date)}</Text>
+                                        <View style={styles.dotSeparatorDark} />
+                                        <Text style={styles.storyMetaText}>{calcReadTime(story.narrative)}</Text>
+                                    </View>
                                 </View>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
 
                 {/* Call to Action */}
                 <TouchableOpacity
                     activeOpacity={0.9}
                     style={styles.ctaBanner}
+                    onPress={() => router.push('/add-memory' as any)}
                 >
                     <View style={styles.ctaIconWrapper}>
                         <Feather name="edit-3" size={20} color={colors.textMuted} />
@@ -357,6 +472,10 @@ const getStyles = (colors: typeof LightTheme) => ScaledSheet.create({
         width: '90@ms',
         height: '100@ms',
         borderRadius: '14@ms',
+    },
+    iconThumb: {
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     storyContent: {
         flex: 1,
