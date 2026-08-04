@@ -7,18 +7,27 @@ import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import Animated, {
+    Easing,
+    runOnJS,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
+    withTiming,
+} from 'react-native-reanimated';
 import {
     ActivityIndicator,
     ScrollView,
     StatusBar,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
     useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScaledSheet } from 'react-native-size-matters';
+import { ScaledSheet, ms, vs } from 'react-native-size-matters';
 
 const FALLBACK_IMAGES = [
     require('@/assets/images/dashboard/lake.png'),
@@ -53,6 +62,32 @@ const formatCategory = (mem: any) => {
     return 'Journal';
 };
 
+const isMemoryMatchingCategory = (m: any, categoryName: string) => {
+    if (!categoryName || categoryName === 'All') return true;
+
+    const catLower = categoryName.toLowerCase().trim();
+    const memType = (m.type || '').toLowerCase().trim();
+
+    if (catLower === 'photos' || catLower === 'photo') {
+        return memType === 'photo' || m.tags?.some((t: string) => t.toLowerCase().includes('photo'));
+    }
+    if (catLower === 'videos' || catLower === 'video') {
+        return memType === 'video' || m.tags?.some((t: string) => t.toLowerCase().includes('video'));
+    }
+    if (catLower === 'notes' || catLower === 'note' || catLower === 'journal') {
+        return memType === 'journal' || memType === 'note' || memType === 'text' || m.tags?.some((t: string) => t.toLowerCase().includes('note') || t.toLowerCase().includes('journal'));
+    }
+    if (catLower === 'voice' || catLower === 'audio' || catLower === 'music') {
+        return memType === 'voice' || memType === 'audio' || memType === 'music' || m.tags?.some((t: string) => t.toLowerCase().includes('voice') || t.toLowerCase().includes('audio'));
+    }
+
+    const tagMatch = m.tags?.some((t: string) => t.toLowerCase().replace(/^#/, '').includes(catLower));
+    const titleMatch = m.title?.toLowerCase().includes(catLower);
+    const narrativeMatch = m.narrative?.toLowerCase().includes(catLower);
+
+    return tagMatch || titleMatch || narrativeMatch;
+};
+
 const calcReadTime = (narrative?: string) => {
     const text = narrative || '';
     const words = text.trim().split(/\s+/).length;
@@ -69,6 +104,73 @@ export default function StoriesScreen() {
     const [memories, setMemories] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeCategory, setActiveCategory] = useState('All');
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+    const [selectedFilterCategory, setSelectedFilterCategory] = useState('All');
+
+    // macOS Search Bar Animation Values
+    const searchScaleX = useSharedValue(0);
+    const searchOpacity = useSharedValue(0);
+    const searchTranslateY = useSharedValue(-12);
+    const [isSearchMounted, setIsSearchMounted] = useState(false);
+
+    // macOS Filter Panel Animation Values
+    const filterScaleY = useSharedValue(0);
+    const filterOpacity = useSharedValue(0);
+    const filterTranslateY = useSharedValue(-12);
+    const [isFilterMounted, setIsFilterMounted] = useState(false);
+
+    useEffect(() => {
+        if (isSearchOpen) {
+            setIsSearchMounted(true);
+            searchOpacity.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.quad) });
+            searchScaleX.value = withSpring(1, { damping: 13, stiffness: 270, mass: 0.5 });
+            searchTranslateY.value = withSpring(0, { damping: 14, stiffness: 280, mass: 0.5 });
+        } else if (isSearchMounted) {
+            searchOpacity.value = withTiming(0, { duration: 150 });
+            searchScaleX.value = withTiming(0.1, { duration: 150, easing: Easing.in(Easing.quad) });
+            searchTranslateY.value = withTiming(-12, { duration: 150 }, (finished) => {
+                if (finished) {
+                    runOnJS(setIsSearchMounted)(false);
+                }
+            });
+        }
+    }, [isSearchOpen, isSearchMounted, searchOpacity, searchScaleX, searchTranslateY]);
+
+    useEffect(() => {
+        if (isFilterOpen) {
+            setIsFilterMounted(true);
+            filterOpacity.value = withTiming(1, { duration: 160, easing: Easing.out(Easing.quad) });
+            filterScaleY.value = withSpring(1, { damping: 13, stiffness: 270, mass: 0.5 });
+            filterTranslateY.value = withSpring(0, { damping: 14, stiffness: 280, mass: 0.5 });
+        } else if (isFilterMounted) {
+            filterOpacity.value = withTiming(0, { duration: 150 });
+            filterScaleY.value = withTiming(0.1, { duration: 150, easing: Easing.in(Easing.quad) });
+            filterTranslateY.value = withTiming(-12, { duration: 150 }, (finished) => {
+                if (finished) {
+                    runOnJS(setIsFilterMounted)(false);
+                }
+            });
+        }
+    }, [isFilterOpen, isFilterMounted, filterOpacity, filterScaleY, filterTranslateY]);
+
+    const animatedSearchStyle = useAnimatedStyle(() => ({
+        opacity: searchOpacity.value,
+        transform: [
+            { translateY: searchTranslateY.value },
+            { scaleX: searchScaleX.value },
+        ],
+    }));
+
+    const animatedFilterStyle = useAnimatedStyle(() => ({
+        opacity: filterOpacity.value,
+        transform: [
+            { translateY: filterTranslateY.value },
+            { scaleY: filterScaleY.value },
+        ],
+    }));
 
     const fetchStoriesMemories = useCallback(async () => {
         try {
@@ -99,31 +201,51 @@ export default function StoriesScreen() {
         }, [fetchStoriesMemories])
     );
 
-    // Pick recent photo memory as featured top story
+    // Filtered & Sorted memories list
+    const filteredMemories = useMemo(() => {
+        let list = memories;
+
+        // 1. Filter by category
+        const catToApply = selectedFilterCategory !== 'All' ? selectedFilterCategory : activeCategory;
+        if (catToApply !== 'All') {
+            list = list.filter((m: any) => isMemoryMatchingCategory(m, catToApply));
+        }
+
+        // 2. Filter by search query
+        if (searchQuery.trim()) {
+            const q = searchQuery.toLowerCase().trim();
+            list = list.filter((m: any) => {
+                const titleMatch = m.title?.toLowerCase().includes(q);
+                const narrativeMatch = m.narrative?.toLowerCase().includes(q);
+                const personMatch = m.whoseMemoryIsThis?.toLowerCase().includes(q);
+                const tagMatch = m.tags?.some((t: string) => t.toLowerCase().includes(q));
+                return titleMatch || narrativeMatch || personMatch || tagMatch;
+            });
+        }
+
+        // 3. Sort Order
+        return [...list].sort((a, b) => {
+            const dateA = new Date(a.date || a.createdAt).getTime();
+            const dateB = new Date(b.date || b.createdAt).getTime();
+            return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+        });
+    }, [memories, activeCategory, selectedFilterCategory, searchQuery, sortOrder]);
+
+    // Pick recent photo memory as featured top story (hidden during active search)
     const featuredPhotoMemory = useMemo(() => {
-        if (memories.length === 0) return null;
-        const photoMem = memories.find((m: any) => (m.type === 'photo' || m.type === 'video') && m.files && m.files.length > 0);
+        if (filteredMemories.length === 0) return null;
+        if (searchQuery.trim()) return null;
+        const photoMem = filteredMemories.find((m: any) => (m.type === 'photo' || m.type === 'video') && m.files && m.files.length > 0);
         return photoMem || null;
-    }, [memories]);
+    }, [filteredMemories, searchQuery]);
 
     // List items excluding featured memory
     const remainingMemories = useMemo(() => {
-        let list = memories;
-        if (featuredPhotoMemory) {
-            list = memories.filter((m: any) => m.id !== featuredPhotoMemory.id);
-        }
-        if (activeCategory !== 'All') {
-            const catLower = activeCategory.toLowerCase();
-            list = list.filter((m: any) => {
-                const category = formatCategory(m).toLowerCase();
-                const type = (m.type || '').toLowerCase();
-                return category.includes(catLower) || type.includes(catLower);
-            });
-        }
-        return list;
-    }, [memories, featuredPhotoMemory, activeCategory]);
+        if (!featuredPhotoMemory) return filteredMemories;
+        return filteredMemories.filter((m: any) => m.id !== featuredPhotoMemory.id);
+    }, [filteredMemories, featuredPhotoMemory]);
 
-    const categories = ['All', 'Photos', 'Milestones', 'Ancestry', 'Travel'];
+    const categories = ['All', 'Photos', 'Videos', 'Notes', 'Voice', 'Milestones', 'Ancestry'];
 
     return (
         <SafeAreaView edges={['top']} style={styles.container}>
@@ -141,19 +263,98 @@ export default function StoriesScreen() {
                 </View>
                 <View style={styles.headerRight}>
                     <TouchableOpacity 
-                        style={styles.iconBtn}
-                        onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                        style={[styles.iconBtn, isSearchOpen && styles.iconBtnActive]}
+                        onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setIsSearchOpen(prev => !prev);
+                            if (isSearchOpen) {
+                                setSearchQuery('');
+                            }
+                        }}
                     >
-                        <Feather name="search" size={24} color={colors.textDark} />
+                        <Feather name={isSearchOpen ? 'x' : 'search'} size={24} color={isSearchOpen ? (colors.primaryAlt || '#8EA281') : colors.textDark} />
                     </TouchableOpacity>
                     <TouchableOpacity 
-                        style={styles.iconBtn}
-                        onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                        style={[styles.iconBtn, isFilterOpen && styles.iconBtnActive]}
+                        onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            setIsFilterOpen(prev => !prev);
+                        }}
                     >
-                        <Feather name="filter" size={24} color={colors.textDark} />
+                        <Feather name="filter" size={24} color={isFilterOpen ? (colors.primaryAlt || '#8EA281') : colors.textDark} />
                     </TouchableOpacity>
                 </View>
             </View>
+
+            {/* Expandable macOS Animated Search Input Bar */}
+            {(isSearchOpen || isSearchMounted) && (
+                <Animated.View style={[styles.searchContainer, animatedSearchStyle]}>
+                    <View style={styles.searchBar}>
+                        <Feather name="search" size={ms(18)} color={colors.textMuted} />
+                        <TextInput
+                            placeholder="Search stories by title, topic, or person..."
+                            placeholderTextColor={colors.textMuted}
+                            style={styles.searchInput}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            autoFocus={isSearchOpen}
+                        />
+                        {searchQuery.length > 0 ? (
+                            <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                <Feather name="x" size={ms(18)} color={colors.textMuted} />
+                            </TouchableOpacity>
+                        ) : null}
+                    </View>
+                </Animated.View>
+            )}
+
+            {/* Expandable macOS Animated Filter Panel */}
+            {(isFilterOpen || isFilterMounted) && (
+                <Animated.View style={[styles.filterPanelContainer, animatedFilterStyle]}>
+                    <View style={styles.filterPanel}>
+                        <Text style={styles.filterSectionTitle}>Sort By Date</Text>
+                        <View style={styles.filterOptionsRow}>
+                            <TouchableOpacity
+                                style={[styles.filterChip, sortOrder === 'newest' && styles.filterChipActive]}
+                                onPress={() => {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                    setSortOrder('newest');
+                                }}
+                            >
+                                <Feather name="arrow-down" size={ms(12)} color={sortOrder === 'newest' ? '#FFF' : colors.textDark} />
+                                <Text style={[styles.filterChipText, sortOrder === 'newest' && styles.filterChipTextActive]}>Newest First</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.filterChip, sortOrder === 'oldest' && styles.filterChipActive]}
+                                onPress={() => {
+                                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                    setSortOrder('oldest');
+                                }}
+                            >
+                                <Feather name="arrow-up" size={ms(12)} color={sortOrder === 'oldest' ? '#FFF' : colors.textDark} />
+                                <Text style={[styles.filterChipText, sortOrder === 'oldest' && styles.filterChipTextActive]}>Oldest First</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={[styles.filterSectionTitle, { marginTop: vs(12) }]}>Filter By Type</Text>
+                        <View style={styles.filterOptionsRow}>
+                            {['All', 'Photos', 'Videos', 'Notes', 'Voice'].map(type => (
+                                <TouchableOpacity
+                                    key={type}
+                                    style={[styles.filterChip, selectedFilterCategory === type && styles.filterChipActive]}
+                                    onPress={() => {
+                                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                        setSelectedFilterCategory(type);
+                                    }}
+                                >
+                                    <Text style={[styles.filterChipText, selectedFilterCategory === type && styles.filterChipTextActive]}>{type}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </Animated.View>
+            )}
 
             <ScrollView
                 showsVerticalScrollIndicator={false}
@@ -343,6 +544,82 @@ const getStyles = (colors: typeof LightTheme) => ScaledSheet.create({
         backgroundColor: colors.cardBg,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    iconBtnActive: {
+        borderWidth: 1,
+        borderColor: colors.primaryAlt || '#8EA281',
+    },
+    searchContainer: {
+        paddingHorizontal: '24@ms',
+        marginBottom: '16@vs',
+    },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.cardBg,
+        borderRadius: '16@ms',
+        paddingHorizontal: '14@ms',
+        height: '44@vs',
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    searchInput: {
+        flex: 1,
+        marginLeft: '10@ms',
+        marginRight: '8@ms',
+        fontFamily: FONTS.sans,
+        fontSize: '14@ms',
+        color: colors.textDark,
+        padding: 0,
+    },
+    filterPanelContainer: {
+        paddingHorizontal: '24@ms',
+        marginBottom: '16@vs',
+    },
+    filterPanel: {
+        backgroundColor: colors.cardBg,
+        borderRadius: '16@ms',
+        padding: '16@ms',
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    filterSectionTitle: {
+        fontFamily: FONTS.sans,
+        fontSize: '11@ms',
+        fontWeight: '600',
+        color: colors.textMuted,
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+        marginBottom: '8@vs',
+    },
+    filterOptionsRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: '8@ms',
+    },
+    filterChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: '6@ms',
+        paddingHorizontal: '12@ms',
+        paddingVertical: '6@vs',
+        borderRadius: '16@ms',
+        backgroundColor: colors.backgroundAlt,
+        borderWidth: 1,
+        borderColor: colors.border,
+    },
+    filterChipActive: {
+        backgroundColor: colors.primaryAlt || '#8EA281',
+        borderColor: colors.primaryAlt || '#8EA281',
+    },
+    filterChipText: {
+        fontFamily: FONTS.sans,
+        fontSize: '12@ms',
+        color: colors.textDark,
+    },
+    filterChipTextActive: {
+        color: '#FFFFFF',
+        fontWeight: '600',
     },
     scrollContent: {
         paddingBottom: '90@vs',
