@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ms, vs } from 'react-native-size-matters';
 import { FONTS } from '@/constants/theme';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { Image } from 'expo-image';
 
 // Shared explicit interface to power full application chronology
 export type TimelineDataPoint = {
@@ -91,7 +92,7 @@ export const TimelineEntry: React.FC<TimelineEntryProps> = ({ item, index, isDar
                         </View>
                     ) : (item.image ? (
                         <View style={styles.imageContainer}>
-                            <Image source={item.image} style={styles.cardImage} />
+                            <Image source={item.image} style={styles.cardImage} contentFit="cover" transition={200} cachePolicy="disk" />
                         </View>
                     ) : null)}
                     

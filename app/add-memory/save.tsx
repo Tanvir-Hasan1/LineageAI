@@ -2,7 +2,7 @@ import { FONTS } from '@/constants/theme';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -76,7 +76,7 @@ export default function SaveReviewScreen() {
         }
     }, [draft.date]);
 
-    const resolveAvatarForPerson = useCallback((rawName: string) => {
+    const resolveAvatarForPerson = useCallback((rawName: string): { type: 'placeholder' | 'uri'; source: any } => {
         const cleanName = rawName.trim().toLowerCase();
         const currentUserName = (user?.name || user?.firstName || '').trim().toLowerCase();
         

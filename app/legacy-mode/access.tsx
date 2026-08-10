@@ -19,6 +19,7 @@ import { ms, vs } from 'react-native-size-matters';
 import { FONTS } from '@/constants/theme';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
+import UserAvatar from '@/components/UserAvatar';
 
 interface AccessScope {
     profile: boolean;
@@ -320,14 +321,15 @@ export default function LegacyAccessListScreen() {
                     <View style={styles.listContainer}>
                         {requests.map((req) => {
                             const badge = getStatusConfig(req.status);
-                            const avatarSource = req.avatarSource || require('@/assets/images/dashboard/avatar.png');
 
                             return (
                                 <View key={req.id} style={[styles.card, { backgroundColor: palette.itemBg }]}>
                                     <View style={styles.cardHeader}>
-                                        <Image 
-                                            source={avatarSource} 
-                                            style={styles.avatar}
+                                        <UserAvatar
+                                            source={req.avatarSource}
+                                            name={req.ownerName}
+                                            size={ms(44)}
+                                            style={{ marginRight: ms(12) }}
                                         />
                                         <View style={styles.nameStack}>
                                             <View style={styles.titleRow}>

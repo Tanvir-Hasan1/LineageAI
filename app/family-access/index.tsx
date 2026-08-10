@@ -22,6 +22,8 @@ import { ms, vs } from 'react-native-size-matters';
 
 // STANDALONE SUBCOMPONENT IMPORT
 import InviteModal from '@/components/InviteModal';
+import UserAvatar from '@/components/UserAvatar';
+
 
 
 
@@ -262,13 +264,18 @@ export default function FamilyAccessScreen() {
                         const cardBg = idx % 2 === 0 ? palette.card1Bg : palette.card2Bg;
                         const badgeBg = idx % 2 === 0 ? palette.badge1Bg : palette.badge2Bg;
 
-                        // Pick profile picture if available, fallback to default avatar
+                        // Pick profile picture if available
                         const avatarUrl = member.profilePicture?.url ? resolveMediaUrl(member.profilePicture.url) : null;
-                        const avatarSource = avatarUrl ? { uri: avatarUrl } : require('@/assets/images/dashboard/avatar.png');
 
                         return (
                             <View key={member.userId || String(idx)} style={[styles.memberCard, { backgroundColor: cardBg }]}>
-                                <Image source={avatarSource} style={styles.avatar} />
+                                <UserAvatar
+                                    url={avatarUrl}
+                                    name={member.name}
+                                    size={ms(48)}
+                                    style={{ marginRight: ms(12) }}
+                                    backgroundColor={isDarkMode ? '#4E5A47' : '#8EA281'}
+                                />
                                 <View style={styles.memberText}>
                                     <Text style={[styles.memberName, { color: isDarkMode ? '#FFFFFF' : '#2D2C39' }]}>
                                         {member.name}{member.relation ? ` (${member.relation})` : ''}

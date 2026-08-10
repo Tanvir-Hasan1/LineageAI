@@ -6,13 +6,13 @@ import {
     TouchableOpacity, 
     ScrollView,
     useColorScheme,
-    Image,
     Switch,
     ActivityIndicator,
     Platform,
     Appearance,
     Alert
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';

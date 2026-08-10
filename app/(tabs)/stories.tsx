@@ -1,7 +1,7 @@
 import { FONTS, LightTheme } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { api } from '@/services/api';
-import { resolveMediaUrl } from '@/utils/image';
+import { getMediaImageSource, resolveMediaUrl } from '@/utils/image';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
@@ -379,12 +379,11 @@ export default function StoriesScreen() {
                             }}
                         >
                             <Image 
-                                source={
-                                    featuredPhotoMemory.files?.[0]?.url
-                                        ? { uri: resolveMediaUrl(featuredPhotoMemory.files[0].url) }
-                                        : FALLBACK_IMAGES[0]
-                                } 
-                                style={styles.featuredImage} 
+                                source={getMediaImageSource(featuredPhotoMemory.files?.[0]?.url, FALLBACK_IMAGES[0])} 
+                                style={styles.featuredImage}
+                                contentFit="cover"
+                                transition={200}
+                                cachePolicy="disk"
                             />
                             <LinearGradient
                                 colors={['transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.9)']}
@@ -454,7 +453,7 @@ export default function StoriesScreen() {
                                 }}
                             >
                                 {isPhotoOrVideo && mediaUrl ? (
-                                    <Image source={{ uri: mediaUrl }} style={styles.storyThumb} />
+                                    <Image source={getMediaImageSource(mediaUrl)} style={styles.storyThumb} contentFit="cover" transition={200} cachePolicy="disk" />
                                 ) : isAudio ? (
                                     <View style={[styles.storyThumb, styles.iconThumb, { backgroundColor: colorScheme === 'dark' ? '#222B26' : '#E8F2EC' }]}>
                                         <Ionicons name="musical-notes-outline" size={28} color={colorScheme === 'dark' ? '#8EA281' : '#5A754E'} />

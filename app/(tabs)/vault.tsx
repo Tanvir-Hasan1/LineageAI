@@ -2,13 +2,13 @@ import { FONTS } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/services/api';
-import { resolveMediaUrl } from '@/utils/image';
+import { getMediaImageSource, resolveMediaUrl } from '@/utils/image';
 import { Feather } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
-    Image,
     RefreshControl,
     ScrollView,
     StyleSheet,
@@ -266,7 +266,7 @@ export default function MemoryVaultScreen() {
                             </View>
                         </View>
                     ) : (item.type === 'photo' && mediaUrl ? (
-                        <Image source={{ uri: mediaUrl }} style={styles.cardHero} />
+                        <Image source={getMediaImageSource(mediaUrl)} style={styles.cardHero} contentFit="cover" transition={200} cachePolicy="disk" />
                     ) : null)}
                     <View style={styles.cardContent}>
                         <View style={styles.topRow}>

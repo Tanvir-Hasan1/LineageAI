@@ -3,7 +3,7 @@ import { FONTS } from '@/constants/theme';
 import { useAppTheme } from '@/hooks/use-app-theme';
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/services/api';
-import { resolveMediaUrl } from '@/utils/image';
+import { getMediaImageSource, resolveMediaUrl } from '@/utils/image';
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
@@ -63,7 +63,7 @@ function mapMemory(mem: any, idx: number): TimelineDataPoint {
         date:     friendly,
         content:  mem.narrative || undefined,
         tags:     Array.isArray(mem.tags) && mem.tags.length ? mem.tags : undefined,
-        image:    type === 'image' && fileUrl ? { uri: fileUrl } : undefined,
+        image:    type === 'image' && fileUrl ? getMediaImageSource(fileUrl) : undefined,
         videoUrl: type === 'video' && fileUrl ? fileUrl : undefined,
         ...palette,
     };
@@ -92,7 +92,7 @@ export default function TimelineScreen() {
                 const avatarUrl = m.profilePicture?.url ? resolveMediaUrl(m.profilePicture.url) : (m.avatarUrl ? resolveMediaUrl(m.avatarUrl) : null);
                 const cleanName = (m.name || '').toLowerCase();
                 const avatar = avatarUrl
-                    ? { uri: avatarUrl }
+                    ? getMediaImageSource(avatarUrl)
                     : (cleanName.includes('robert')
                         ? AVATARS.robert
                         : cleanName.includes('margaret')

@@ -123,6 +123,9 @@ export default function DashboardScreen() {
                                 <Image
                                     source={getAvatarSource(user)}
                                     style={styles.avatar}
+                                    contentFit="cover"
+                                    transition={200}
+                                    cachePolicy="disk"
                                     onLoadStart={() => setProfilePictureLoading(true)}
                                     onLoadEnd={() => setProfilePictureLoading(false)}
                                     onError={() => {

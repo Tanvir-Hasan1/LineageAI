@@ -1,3 +1,4 @@
+import UserAvatar from '@/components/UserAvatar';
 import { FONTS } from '@/constants/theme';
 import { Feather } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
@@ -141,21 +142,13 @@ export function MacPersonasModal({
                                         (isDarkMode ? styles.rowBorderDark : styles.rowBorderLight),
                                 ]}
                             >
-                                <View
-                                    style={[
-                                        styles.avatarCircle,
-                                        {
-                                            backgroundColor: isDarkMode ? '#323239' : '#E5E8E2',
-                                            borderColor: isDarkMode ? '#444' : '#D0D5CE',
-                                        },
-                                    ]}
-                                >
-                                    {person.avatarInfo.type === 'uri' && person.avatarInfo.source ? (
-                                        <Image source={person.avatarInfo.source} style={styles.avatarImg} />
-                                    ) : (
-                                        <Feather name="user" size={ms(18)} color={isDarkMode ? '#BBB' : '#555'} />
-                                    )}
-                                </View>
+                                <UserAvatar
+                                    source={person.avatarInfo.type === 'uri' ? person.avatarInfo.source : null}
+                                    name={person.name}
+                                    size={ms(44)}
+                                    backgroundColor={isDarkMode ? '#323239' : '#8EA281'}
+                                    style={{ marginRight: ms(12) }}
+                                />
 
                                 <View style={styles.personMeta}>
                                     <Text

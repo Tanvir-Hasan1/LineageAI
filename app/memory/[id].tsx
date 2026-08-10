@@ -5,7 +5,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
     ActivityIndicator,
-    Image,
     PanResponder,
     ScrollView,
     StyleSheet,
@@ -15,10 +14,12 @@ import {
     View,
     Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ms, vs } from 'react-native-size-matters';
 import { api } from '@/services/api';
-import { getAvatarSource, resolveMediaUrl } from '@/utils/image';
+import { getAvatarSource, getMediaImageSource, resolveMediaUrl } from '@/utils/image';
+import UserAvatar from '@/components/UserAvatar';
 import { ApiMemory } from '../(tabs)/vault';
 import { useAuth } from '@/hooks/use-auth';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -282,7 +283,7 @@ export default function MemoryDetailScreen() {
         return cleanName === 'self' || cleanName === 'mine' || cleanName === currentUserName;
     }, [memory, user]);
 
-    const resolveAvatarForPerson = useCallback((rawName: string) => {
+    const resolveAvatarForPerson = useCallback((rawName: string): { type: 'placeholder' | 'uri'; source: any } => {
         const cleanName = rawName.trim().toLowerCase();
         const currentUserName = (user?.name || user?.firstName || '').trim().toLowerCase();
         
@@ -304,7 +305,7 @@ export default function MemoryDetailScreen() {
                 ? resolveMediaUrl(member.profilePicture.url)
                 : (member.avatarUrl ? resolveMediaUrl(member.avatarUrl) : null);
             if (avatarUrl) {
-                return { type: 'uri', source: { uri: avatarUrl } };
+                return { type: 'uri', source: getMediaImageSource(avatarUrl) };
             }
         }
 
@@ -505,7 +506,7 @@ export default function MemoryDetailScreen() {
                     </View>
                 ) : (mediaUrl && memory.type === 'photo' ? (
                     <View style={styles.mediaContainer}>
-                        <Image source={{ uri: mediaUrl }} style={styles.heroImage} />
+                        <Image source={getMediaImageSource(mediaUrl)} style={styles.heroImage} contentFit="cover" transition={200} cachePolicy="disk" />
                     </View>
                 ) : null)}
 
@@ -668,24 +669,19 @@ export default function MemoryDetailScreen() {
                             {taggedPersons.slice(0, 3).map((item, idx) => {
                                 const isFirst = idx === 0;
                                 return (
-                                    <View
+                                    <UserAvatar
                                         key={`${item.name}-${idx}`}
-                                        style={[
-                                            styles.avatarStackCircle,
-                                            {
-                                                marginLeft: isFirst ? ms(8) : -ms(12),
-                                                borderColor: isDarkMode ? '#222220' : '#EAE8E4',
-                                                zIndex: 10 - idx,
-                                                backgroundColor: isDarkMode ? '#323239' : '#DDE0D8',
-                                            }
-                                        ]}
-                                    >
-                                        {item.avatarInfo.type === 'uri' && item.avatarInfo.source ? (
-                                            <Image source={item.avatarInfo.source} style={styles.avatarStackImg} />
-                                        ) : (
-                                            <Feather name="user" size={ms(16)} color={isDarkMode ? '#AAA' : '#666'} />
-                                        )}
-                                    </View>
+                                        source={item.avatarInfo.type === 'uri' ? item.avatarInfo.source : null}
+                                        name={item.name}
+                                        size={ms(28)}
+                                        backgroundColor={isDarkMode ? '#323239' : '#8EA281'}
+                                        style={{
+                                            marginLeft: isFirst ? ms(8) : -ms(12),
+                                            borderWidth: 2,
+                                            borderColor: isDarkMode ? '#222220' : '#EAE8E4',
+                                            zIndex: 10 - idx,
+                                        }}
+                                    />
                                 );
                             })}
                             {taggedPersons.length > 3 && (
